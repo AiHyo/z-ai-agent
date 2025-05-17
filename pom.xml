@@ -88,6 +88,18 @@
             <artifactId>kryo</artifactId>
             <version>5.6.2</version>
         </dependency>
+        <!-- RAG 读取markdown文件 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-markdown-document-reader</artifactId>
+            <version>1.0.0-M8</version>
+        </dependency>
+        <!-- RAG 查询增强，实际好像不引入也能用 -->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.ai</groupId>-->
+<!--            <artifactId>spring-ai-advisors-vector-store</artifactId>-->
+<!--            <version>1.0.0-M8</version>-->
+<!--        </dependency>-->
     </dependencies>
     <repositories>
         <repository>
