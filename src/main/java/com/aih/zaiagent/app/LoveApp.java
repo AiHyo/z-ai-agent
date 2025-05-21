@@ -3,6 +3,8 @@ package com.aih.zaiagent.app;
 import com.aih.zaiagent.advisor.MyLoggerAdvisor;
 import com.aih.zaiagent.advisor.ReReadingAdvisor;
 import com.aih.zaiagent.chatmemory.FileBaseChatMemory;
+import com.aih.zaiagent.rag.LoveAppRagCustomAdvisorFactory;
+import com.aih.zaiagent.rag.QueryRewriter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -20,6 +22,9 @@ import java.util.List;
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
 
+/**
+ * @author AiHyo
+ */
 @Slf4j
 @Component
 public class LoveApp {
@@ -35,8 +40,7 @@ public class LoveApp {
             "引导用户详述事情经过、对方反应及自身想法，以便给出专属解决方案。";
 
     /**
-     *
-     * @param dashscopeChatModel
+     * 构造函数：使用 dashScopeChatModel 创建 ChatClient
      */
     public LoveApp(ChatModel dashscopeChatModel) {
         // 初始化基于【文件】的对话记忆
@@ -60,7 +64,6 @@ public class LoveApp {
      * AI 基础对话（支持多轮对话记忆）
      * @param message
      * @param chatId
-     * @return
      */
     public String doChat(String message, String chatId){
         ChatResponse chatResponse = chatClient.prompt()
@@ -84,7 +87,6 @@ public class LoveApp {
      * AI 恋爱报告功能（实战结构化输出）
      * @param message
      * @param chatId
-     * @return
      */
     public LoveReport doChatWithReport(String message, String chatId){
         LoveReport loveReport = chatClient
@@ -101,19 +103,31 @@ public class LoveApp {
         return loveReport;
     }
 
-    // 应用本地知识库问答
+
     @Resource
     private VectorStore loveAppVectorStore;
+    @Resource
+    private VectorStore pgVectorVectorStore;
+    @Resource
+    private QueryRewriter queryRewriter;
+    // 应用RAG检索增强服务（基于内存 / PgVector的向量存储）
     public String doChatWithRag(String message, String chatId) {
         ChatResponse chatResponse = chatClient
                 .prompt()
                 .user(message)
+                // .user(queryRewriter.doQueryRewrite(message)) // 应用基于AI的查询重写器
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)) // 设置对话记忆的会话ID 和 记忆大小
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
-                // // 应用增强检索服务（本地知识库）
-                .advisors(new QuestionAnswerAdvisor(loveAppVectorStore))
+                // 应用RAG检索增强顾问（基于内存的本地向量存储）
+                // .advisors(new QuestionAnswerAdvisor(loveAppVectorStore))
+                // 应用RAG检索增强顾问（基于PgVector的向量存储）
+                .advisors(new QuestionAnswerAdvisor(pgVectorVectorStore))
+                // 应用自定义的RAG检索增强顾问，在向量存储基础上，添加其他条件（文档查询器【自定义：向量存储+检索条件】 + 上下文增强器【自定义：上下文为空时候，根据指定模板回答】）
+                // .advisors(LoveAppRagCustomAdvisorFactory.createLoveAppRagCustomAdvisor(
+                //         loveAppVectorStore, "已婚"
+                // ))
                 .call()
                 .chatResponse();
         String content = chatResponse.getResult().getOutput().getText();
@@ -121,9 +135,10 @@ public class LoveApp {
         return content;
     }
 
-    // 应用云知识库问答
+
     @Resource
     private Advisor loveAppRagCloudAdvisor;
+    // 应用云知识库问答
     public String doChatWithRagCloud(String message, String chatId) {
         ChatResponse chatResponse = chatClient
                 .prompt()
@@ -132,7 +147,7 @@ public class LoveApp {
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
-                // 应用增强检索服务（云知识库服务）
+                // 应用RAG检索增强服务（基于云知识库的向量存储）
                 .advisors(loveAppRagCloudAdvisor)
                 .call()
                 .chatResponse();

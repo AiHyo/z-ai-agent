@@ -10,12 +10,19 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 
+/**
+ * 初始化基于内存的向量存储 Bean
+ * @author AiHyo
+ */
 @Configuration
-// 向量转换和存储配置
 public class LoveAppVectorStoreConfig {
 
     @Resource
     private LoveAppDocumentLoader loveAppDocumentLoader;
+    @Resource
+    private MyTokenTextSplitter myTokenTextSplitter;
+    @Resource
+    private MyMetadataEnricher myMetadataEnricher;
 
     @Bean
     VectorStore loveAppVectorStore(EmbeddingModel dashscopeEmbeddingModel) {
@@ -24,7 +31,11 @@ public class LoveAppVectorStoreConfig {
                 .build();
         // 加载文档
         List<Document> documents = loveAppDocumentLoader.loadMarkdowns();
-        simpleVectorStore.add(documents);
+        // 自主切分
+        // List<Document> splitDocuments = myTokenTextSplitter.splitDocuments(documents);
+        // 增强元数据, 基于AI自动补充关键词元信息：metadata中会多出excerpt_keywords
+        List<Document> enrichedDocuments = myMetadataEnricher.enrichDocumentsByKeyword(documents);
+        simpleVectorStore.add(enrichedDocuments);
         return simpleVectorStore;
     }
 }
