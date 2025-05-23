@@ -47,3 +47,7 @@ knife4j:
 logging:
   level:
     org.springframework.ai.chat.client.advisor.org.springframework.ai.chat.client.advisor.MyLoggerAdvisor: debug
+    org.springframework.ai: DEBUG # 修改日志级别，查看 Spring AI 更多调用细节
+# searchApi
+#search-api:
+#  api-key: your-apikey
