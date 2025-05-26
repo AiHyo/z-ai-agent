@@ -1,0 +1,8 @@
+spring:
+  profiles:
+    active: stdio, local
+server:
+  port: 8127
+#https://www.pexels.com/api/key/
+#pexels:
+#  api-key: your-api-key

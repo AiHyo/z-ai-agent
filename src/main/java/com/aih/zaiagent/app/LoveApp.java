@@ -15,6 +15,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
@@ -159,6 +160,7 @@ public class LoveApp {
 
     @Resource
     private ToolCallback[] allTools;
+    // 提供 AI 工具调用
     public String doChatWithTools(String message, String chatId) {
         ChatResponse response = chatClient
                 .prompt()
@@ -176,6 +178,25 @@ public class LoveApp {
         return content;
     }
 
+    @Resource
+    private ToolCallbackProvider toolCallbackProvider;
+    // AI 调用 MCP 服务
+    public String doChatWithMcp(String message, String chatId) {
+        ChatResponse response = chatClient
+                .prompt()
+                .user(message)
+                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                // 开启日志，便于观察效果
+                .advisors(new MyLoggerAdvisor())
+                // 通过自动注入的 ToolCallbackProvider 获取到配置中定义的 MCP 服务提供的 所有工具，并提供给 ChatClient
+                .tools(toolCallbackProvider)
+                .call()
+                .chatResponse();
+        String content = response.getResult().getOutput().getText();
+        log.info("content: {}", content);
+        return content;
+    }
 
 
 

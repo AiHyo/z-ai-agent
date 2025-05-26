@@ -15,6 +15,16 @@ spring:
       base-url: http://localhost:11434
       chat:
         model: gemma3:1b
+    mcp:
+      client:
+#        # 本地，则可以使用stdio模式，并且指定mcp服务配置文件的位置
+#        stdio:
+#          servers-configuration: classpath:mcp-servers.json
+        # 如果是远程，使用sse模式，并且指定mcp服务的地址
+        sse:
+          connections:
+            server1:
+              url: http://localhost:8127
 #    vectorstore:
 #      pgvector:
 #        index-type: HNSW
@@ -48,6 +58,6 @@ logging:
   level:
     org.springframework.ai.chat.client.advisor.org.springframework.ai.chat.client.advisor.MyLoggerAdvisor: debug
     org.springframework.ai: DEBUG # 修改日志级别，查看 Spring AI 更多调用细节
-# searchApi
+# searchApi https://www.searchapi.io/
 #search-api:
 #  api-key: your-apikey

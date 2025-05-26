@@ -1,0 +1,14 @@
+# 开发stdio服务，配置如下，使用 spring-ai-starter-mcp-server
+spring:
+  ai:
+    mcp:
+      server:
+        name: z-image-search-mcp-server
+        version: 0.0.1
+        type: SYNC # 同步
+        # stdio
+        stdio: true
+  # stdio
+  main:
+    web-application-type: none # 指定应用为非 Web 类型（不启动 Web 服务器），适用于命令行、批处理等场景。
+    banner-mode: off # 启动时关闭 Spring Boot 的 banner（启动横幅），让控制台输出更简洁。

@@ -1,0 +1,10 @@
+# 开发SSE服务，配置如下，使用 spring-ai-starter-mcp-server-webmvc
+spring:
+  ai:
+    mcp:
+      server:
+        name: z-image-search-mcp-server
+        version: 0.0.1
+        type: SYNC # 同步
+        # sse
+        stdio: false
