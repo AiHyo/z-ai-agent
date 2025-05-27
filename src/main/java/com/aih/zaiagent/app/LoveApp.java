@@ -3,7 +3,6 @@ package com.aih.zaiagent.app;
 import com.aih.zaiagent.advisor.MyLoggerAdvisor;
 import com.aih.zaiagent.advisor.ReReadingAdvisor;
 import com.aih.zaiagent.chatmemory.FileBaseChatMemory;
-import com.aih.zaiagent.rag.LoveAppRagCustomAdvisorFactory;
 import com.aih.zaiagent.rag.QueryRewriter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -159,7 +158,7 @@ public class LoveApp {
     }
 
     @Resource
-    private ToolCallback[] allTools;
+    private ToolCallback[] availableTools;
     // 提供 AI 工具调用
     public String doChatWithTools(String message, String chatId) {
         ChatResponse response = chatClient
@@ -170,7 +169,7 @@ public class LoveApp {
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
                 // 添加可用的工具
-                .tools(allTools)
+                .tools(availableTools)
                 .call()
                 .chatResponse();
         String content = response.getResult().getOutput().getText();

@@ -1,6 +1,6 @@
 spring:
   profiles:
-    active: stdio, local
+    active: sse, local
 server:
   port: 8127
 #https://www.pexels.com/api/key/

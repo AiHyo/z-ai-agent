@@ -18,13 +18,14 @@ public class ToolRegistration {
     private String apiKey;
 
     @Bean
-    public ToolCallback[] allTools() {
+    public ToolCallback[] availableTools() {
         FileOperationTool fileOperationTool = new FileOperationTool();
         PDFGenerationTool pdfGenerationTool = new PDFGenerationTool();
         ResourceDownloadTool resourceDownloadTool = new ResourceDownloadTool();
         TerminalOperationTool terminalOperationTool = new TerminalOperationTool();
         WebSearchTool webSearchTool = new WebSearchTool(apiKey);
         WebSpiderTool webSpiderTool = new WebSpiderTool();
+        TerminateTool terminateTool = new TerminateTool();
         // 注册所有工具
         return ToolCallbacks.from(
                 fileOperationTool,
@@ -32,7 +33,8 @@ public class ToolRegistration {
                 resourceDownloadTool,
                 terminalOperationTool,
                 webSearchTool,
-                webSpiderTool
+                webSpiderTool,
+                terminateTool
         );
     }
 }
