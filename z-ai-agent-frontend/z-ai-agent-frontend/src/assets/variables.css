@@ -1,0 +1,47 @@
+:root {
+  /* 颜色变量 */
+  --primary-color: #4f46e5;
+  --primary-hover: #4338ca;
+  --secondary-color: #10b981;
+  --background-color: #0f172a;
+  --card-bg-color: #1e293b;
+  --text-color: #f1f5f9;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --user-message-bg: #3b82f6;
+  --ai-message-bg: #475569;
+  --danger-color: #ef4444;
+  --warning-color: #f59e0b;
+  --success-color: #22c55e;
+  
+  /* 字体 */
+  --font-family: 'JetBrains Mono', 'Source Code Pro', Monaco, Menlo, Consolas, 'Courier New', monospace;
+  
+  /* 阴影 */
+  --box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  
+  /* 间距 */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  
+  /* 圆角 */
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 1rem;
+  --border-radius-full: 9999px;
+  
+  /* 过渡 */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+  
+  /* 布局 */
+  --container-max-width: 1200px;
+  --header-height: 4rem;
+  --footer-height: 3rem;
+} 
