@@ -1,5 +1,8 @@
 package com.aih.zaiagent.demo.invoke;
 
 public interface TestApiKey {
-    String API_KEY = "sk-4f1d7355fb6d452c95374a3d1c8b2970";
+
+    // https://bailian.console.aliyun.com/?tab=app#/api-key
+    String API_KEY = "your-api-key"; // 替换为你的API密钥
+
 }

@@ -17,6 +17,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -71,13 +72,29 @@ public class LoveApp {
                 .user(message)
                 .advisors(advisorSpec -> advisorSpec
                         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId) // 设置对话记忆的会话ID
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)    // 设置对话记忆的检索大小
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)    // 设置对话记忆的检索大小
                 )
                 .call()
                 .chatResponse();
         String content = chatResponse != null ? chatResponse.getResult().getOutput().getText() : null;
         // log.info("content: {}", content);
         return content;
+    }
+
+    /**
+     * AI 基础对话（支持多轮对话记忆）
+     * @param message
+     * @param chatId
+     */
+    public Flux<String> doChatByStream(String message, String chatId){
+        return chatClient.prompt()
+                .user(message)
+                .advisors(advisorSpec -> advisorSpec
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId) // 设置对话记忆的会话ID
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)    // 设置对话记忆的检索大小
+                )
+                .stream()
+                .content();
     }
 
     record LoveReport(String title, List<String> suggestions){
@@ -96,7 +113,7 @@ public class LoveApp {
                 .user(message)
                 .advisors(advisorSpec -> advisorSpec
                         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId) // 设置对话记忆的会话ID
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)    // 设置对话记忆的检索大小
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)    // 设置对话记忆的检索大小
                 )
                 .call()
                 .entity(LoveReport.class);
@@ -118,7 +135,7 @@ public class LoveApp {
                 .user(message)
                 // .user(queryRewriter.doQueryRewrite(message)) // 应用基于AI的查询重写器
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10)) // 设置对话记忆的会话ID 和 记忆大小
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)) // 设置对话记忆的会话ID 和 记忆大小
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
                 // 应用RAG检索增强顾问（基于内存的本地向量存储）
@@ -145,7 +162,7 @@ public class LoveApp {
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20))
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
                 // 应用RAG检索增强服务（基于云知识库的向量存储）
@@ -165,7 +182,7 @@ public class LoveApp {
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20))
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
                 // 添加可用的工具
@@ -185,7 +202,7 @@ public class LoveApp {
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10))
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20))
                 // 开启日志，便于观察效果
                 .advisors(new MyLoggerAdvisor())
                 // 通过自动注入的 ToolCallbackProvider 获取到配置中定义的 MCP 服务提供的 所有工具，并提供给 ChatClient
