@@ -1,6 +1,7 @@
 package com.aih.zaiagent.tools.registration;
 
 import com.aih.zaiagent.tools.*;
+import jakarta.annotation.Resource;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbacks;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,11 +18,15 @@ public class ToolRegistration {
     @Value("${search-api.api-key}")
     private String apiKey;
 
+    @Resource
+    private FileOperationTool fileOperationTool;
+    @Resource
+    private PDFGenerationTool pdfGenerationTool;
+    @Resource
+    private ResourceDownloadTool resourceDownloadTool;
+
     @Bean
     public ToolCallback[] availableTools() {
-        FileOperationTool fileOperationTool = new FileOperationTool();
-        PDFGenerationTool pdfGenerationTool = new PDFGenerationTool();
-        ResourceDownloadTool resourceDownloadTool = new ResourceDownloadTool();
         TerminalOperationTool terminalOperationTool = new TerminalOperationTool();
         WebSearchTool webSearchTool = new WebSearchTool(apiKey);
         WebSpiderTool webSpiderTool = new WebSpiderTool();
