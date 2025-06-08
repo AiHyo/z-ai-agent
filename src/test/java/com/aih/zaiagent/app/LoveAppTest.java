@@ -54,7 +54,7 @@ class LoveAppTest {
     @Test
     void doChatWithTools() {
         // 测试联网搜索问题的答案
-        // testMessage("周末想带女朋友去上海约会，推荐几个适合情侣的小众打卡地？"); // xiao'z
+        // testMessage("周末想带女朋友去上海约会，推荐几个适合情侣的小众打卡地？"); //
         //
         // // 测试网页抓取：恋爱案例分析
         // testMessage("最近和对象吵架了，看看其他网站的其他情侣是怎么解决矛盾的？");

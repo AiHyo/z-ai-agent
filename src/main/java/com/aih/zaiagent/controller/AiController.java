@@ -2,30 +2,34 @@ package com.aih.zaiagent.controller;
 
 import com.aih.zaiagent.agent.MyManus;
 import com.aih.zaiagent.app.LoveApp;
-import com.aih.zaiagent.entity.Message;
 import com.aih.zaiagent.service.ConversationService;
 import com.aih.zaiagent.service.UserService;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.exception.NotLoginException;
-import cn.dev33.satoken.stp.StpUtil;
 import jakarta.annotation.Resource;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author AiHyo
  */
 @RestController
-@RequestMapping("/api/ai")
+@RequestMapping("/ai")
 public class AiController {
+
+    private static final Logger log = LoggerFactory.getLogger(AiController.class);
 
     @Resource
     private LoveApp loveApp;
@@ -35,159 +39,149 @@ public class AiController {
 
     @Resource
     private DashScopeChatModel dashscopeChatModel;
-    
+
     @Resource
     private ConversationService conversationService;
-    
+
     @Resource
     private UserService userService;
+
+    // 用于临时存储流式响应的完整内容
+    private final ConcurrentHashMap<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
 
     /**
      * 同步调用 LoveApp AI 恋爱大师
      * @param message 用户输入的消息
-     * @param conversationId 聊天会话 ID
+     * @param chatId 聊天会话 ID
      * @return 返回聊天结果
      */
-    @SaCheckLogin
     @GetMapping("/love_app/chat/sync")
-    public String doChatWithLoveAppSync(String message, String conversationId) {
-        // 保存用户消息
-        saveMessage(conversationId, true, message);
-        
-        // 调用AI
-        String response = loveApp.doChat(message, conversationId);
-        
-        // 保存AI回复
-        saveMessage(conversationId, false, response);
-        
-        return response;
+    public String doChatWithLoveAppSync(String message, String chatId) {
+        return loveApp.doChat(message, chatId);
     }
 
     /**
      * SSE 流式调用 LoveApp AI 恋爱大师
      * @param message 用户输入的消息
-     * @param conversationId 聊天会话 ID
+     * @param chatId 聊天会话 ID
+     * @param conversationId 会话ID (用于保存消息，可选)
      * @return 返回聊天结果
      */
     // 返回؜ Flux 响应式‌对象，并且添加  SSE 对应的 MediaType
     @GetMapping(value = "/love_app/chat/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> doChatWithLoveAppSse(String message, String conversationId) {
-        // 尝试保存用户消息
-        try {
-            if (StpUtil.isLogin()) {
-                saveMessage(conversationId, true, message);
-            }
-        } catch (Exception e) {
-            // 可能未登录，非致命错误，忽略
-        }
-        
-        Flux<String> responseFlux = loveApp.doChatByStream(message, conversationId);
-        
-        // 在流完成后保存AI回复
-        responseFlux = responseFlux.cache(); // 缓存流内容
-        
-        StringBuilder fullResponse = new StringBuilder();
-        responseFlux.subscribe(
-            chunk -> fullResponse.append(chunk),
-            error -> {},
-            () -> {
+    public Flux<String> doChatWithLoveAppSse(String message, String chatId,
+                                           @RequestParam(required = false) String conversationId,
+                                           @RequestParam(required = false) String token) {
+        // 获取原始响应流
+        Flux<String> originalFlux = loveApp.doChatByStream(message, chatId);
+
+        // 如果提供了conversationId，则保存消息
+        if (conversationId != null && !conversationId.isEmpty()) {
+            try {
+                // 尝试获取当前用户
+                Long userId = null;
                 try {
-                    if (StpUtil.isLogin()) {
-                        saveMessage(conversationId, false, fullResponse.toString());
-                    }
+                    // 首先尝试从当前会话获取用户信息
+                    userId = userService.getCurrentUser().getId();
                 } catch (Exception e) {
-                    // 忽略保存错误
+                    // 如果从当前会话获取失败，尝试使用传入的token
+                    if (token != null && !token.isEmpty()) {
+                        // 临时设置token
+                        cn.dev33.satoken.stp.StpUtil.setTokenValue(token);
+                        try {
+                            // 再次尝试获取用户
+                            userId = userService.getCurrentUser().getId();
+                        } catch (Exception ex) {
+                            // 仍然失败，返回原始流，不保存消息
+                            return originalFlux;
+                        }
+                    } else {
+                        // 无token，返回原始流，不保存消息
+                        return originalFlux;
+                    }
                 }
+
+                // 保存用户消息
+                conversationService.saveMessage(conversationId, userId, message, "user");
+
+                // 初始化响应构建器
+                String responseKey = conversationId + "_" + LocalDateTime.now().toString();
+                responseBuilders.put(responseKey, new StringBuilder());
+
+                // 收集完整响应并在结束时保存
+                final Long finalUserId = userId;  // 创建一个final变量用于lambda表达式
+                return originalFlux
+                        .doOnNext(chunk -> {
+                            // 累积响应内容
+                            responseBuilders.get(responseKey).append(chunk);
+                        })
+                        .doOnComplete(() -> {
+                            // 在流结束时获取完整响应并保存
+                            String fullResponse = responseBuilders.get(responseKey).toString();
+
+                            // 保存AI回复
+                            conversationService.saveMessage(
+                                    conversationId,
+                                    finalUserId,
+                                    fullResponse,
+                                    "ai"
+                            );
+
+                            // 更新会话最后消息
+                            conversationService.updateLastMessage(conversationId, fullResponse);
+
+                            // 清理临时存储
+                            responseBuilders.remove(responseKey);
+                        })
+                        .doOnError(e -> responseBuilders.remove(responseKey));
+            } catch (Exception e) {
+                // 出现任何异常，返回原始流，不保存消息
+                return originalFlux;
             }
-        );
-        
-        return responseFlux;
+        }
+
+        // 如果没有提供conversationId，则直接返回响应流
+        return originalFlux;
     }
 
     /**
      * SSE 流式调用 LoveApp AI 恋爱大师
      * @param message 用户输入的消息
-     * @param conversationId 聊天会话 ID
+     * @param chatId 聊天会话 ID
      * @return 返回聊天结果
      */
     // 返回 ؜Flux 对象，并且‌设置泛型为 ServerSentEvent。使用这种方式可以‍省略 MediaType
     @GetMapping(value = "/love_app/chat/server_sent_event")
-    public Flux<ServerSentEvent<String>> doChatWithLoveAppServerSentEvent(String message, String conversationId) {
-        // 尝试保存用户消息
-        try {
-            if (StpUtil.isLogin()) {
-                saveMessage(conversationId, true, message);
-            }
-        } catch (Exception e) {
-            // 可能未登录，非致命错误，忽略
-        }
-        
-        StringBuilder fullResponse = new StringBuilder();
-        
-        return loveApp.doChatByStream(message, conversationId)
-                .map(chunk -> {
-                    fullResponse.append(chunk);
-                    return ServerSentEvent.<String>builder()
-                            .data(chunk)
-                            .build();
-                })
-                .doOnComplete(() -> {
-                    try {
-                        if (StpUtil.isLogin()) {
-                            saveMessage(conversationId, false, fullResponse.toString());
-                        }
-                    } catch (Exception e) {
-                        // 忽略保存错误
-                    }
-                });
+    public Flux<ServerSentEvent<String>> doChatWithLoveAppServerSentEvent(String message, String chatId) {
+        return loveApp.doChatByStream(message, chatId)
+                .map(chunk -> ServerSentEvent.<String>builder()
+                        .data(chunk)
+                        .build());
     }
 
     /**
      * SSE 流式调用 LoveApp AI 恋爱大师
      * @param message 用户输入的消息
-     * @param conversationId 聊天会话 ID
+     * @param chatId 聊天会话 ID
      * @return 返回聊天结果
      */
     // 使用 ؜SSEEmitter，‌通过 send 方法持续向 SseEmitter 发送消息（‍有点像 IO 操作）
     @GetMapping(value = "/love_app/chat/server_sse_emitter")
-    public SseEmitter doChatWithLoveAppServerSseEmitter(String message, String conversationId) {
+    public SseEmitter doChatWithLoveAppServerSseEmitter(String message, String chatId) {
         SseEmitter sseEmitter = new SseEmitter(180000L); // 设置超时时间为 3 分钟
-        
-        // 尝试保存用户消息
-        try {
-            if (StpUtil.isLogin()) {
-                saveMessage(conversationId, true, message);
-            }
-        } catch (Exception e) {
-            // 可能未登录，非致命错误，忽略
-        }
-        
         // 获取 Flux 响应数据流
-        Flux<String> eventFlux = loveApp.doChatByStream(message, conversationId);
-        
-        StringBuilder fullResponse = new StringBuilder();
-        
+        Flux<String> eventFlux = loveApp.doChatByStream(message, chatId);
         // 通过直接订阅推送给SseEmitter
         eventFlux.subscribe(
                 data -> {
                     try {
-                        fullResponse.append(data);
                         sseEmitter.send(data);
                     } catch (Exception e) {
                         sseEmitter.completeWithError(e);
                     }
                 },
                 sseEmitter::completeWithError,
-                () -> {
-                    try {
-                        if (StpUtil.isLogin()) {
-                            saveMessage(conversationId, false, fullResponse.toString());
-                        }
-                        sseEmitter.complete();
-                    } catch (Exception e) {
-                        sseEmitter.completeWithError(e);
-                    }
-                }
+                sseEmitter::complete
         );
         // 返回
         return sseEmitter;
@@ -196,73 +190,11 @@ public class AiController {
     /**
      * 流式调用 Manus 超级智能体
      * @param message 用户输入的消息
-     * @param conversationId 会话ID，可选
      * @return 流式返回聊天结果
      */
     @GetMapping(value = "/manus/chat/sse")
-    public SseEmitter doChatWithManusSse(String message, String conversationId) {
-        // 创建 SseEmitter 实例
-        SseEmitter sseEmitter = new SseEmitter(180000L); // 3分钟超时
-        
-        // 尝试保存用户消息
-        try {
-            if (StpUtil.isLogin() && conversationId != null) {
-                saveMessage(conversationId, true, message);
-            }
-        } catch (Exception e) {
-            // 可能未登录，非致命错误，忽略
-        }
-        
-        // 创建MyManus实例
+    public SseEmitter doChatWithManusSse(String message) {
         MyManus myManus = new MyManus(availableTools, dashscopeChatModel);
-        
-        // 包装SseEmitter来捕获返回的消息
-        SseEmitter wrappedEmitter = new SseEmitter(180000L) {
-            StringBuilder fullResponse = new StringBuilder();
-            
-            @Override
-            public void send(Object data) throws Exception {
-                String strData = data.toString();
-                fullResponse.append(strData);
-                sseEmitter.send(strData);
-            }
-            
-            @Override
-            public void complete() {
-                try {
-                    if (StpUtil.isLogin() && conversationId != null) {
-                        saveMessage(conversationId, false, fullResponse.toString());
-                    }
-                } catch (Exception e) {
-                    // 忽略保存错误
-                }
-                sseEmitter.complete();
-            }
-            
-            @Override
-            public void completeWithError(Throwable ex) {
-                sseEmitter.completeWithError(ex);
-            }
-        };
-        
-        // 执行Manus智能体
-        myManus.runStreamWithEmitter(message, wrappedEmitter);
-        
-        return sseEmitter;
-    }
-    
-    /**
-     * 保存消息到会话
-     */
-    private void saveMessage(String conversationId, boolean isUser, String content) {
-        // 只有登录状态才保存消息
-        if (StpUtil.isLogin() && conversationId != null && !conversationId.isEmpty()) {
-            try {
-                conversationService.addMessage(conversationId, isUser, content);
-            } catch (Exception e) {
-                // 记录日志但不影响主流程
-                e.printStackTrace();
-            }
-        }
+        return myManus.runStream(message);
     }
 }

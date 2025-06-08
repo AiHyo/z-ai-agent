@@ -8,6 +8,8 @@
     <div class="glowing-stars"></div>
     <div class="tech-circles"></div>
     
+    <HeaderNav />
+    
     <div class="home-header">
       <div class="logo-container">
         <div class="logo-icon">AI</div>
@@ -157,12 +159,14 @@
 <script>
 import TheFooter from '@/components/TheFooter.vue'
 import AiAvatar from '@/components/AiAvatar.vue'
+import HeaderNav from '@/components/HeaderNav.vue'
 
 export default {
   name: 'HomeView',
   components: {
     TheFooter,
-    AiAvatar
+    AiAvatar,
+    HeaderNav
   },
   mounted() {
     this.initCyberParticles();

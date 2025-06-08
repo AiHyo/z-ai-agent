@@ -7,9 +7,279 @@ export const generateChatId = () => {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
 }
 
+// 用户认证相关接口
+const authApi = {
+  // 用户登录
+  login: async (username, password) => {
+    try {
+      const response = await axios.post(`${API_URL}/user/login`, {
+        username,
+        password
+      })
+      return response.data
+    } catch (error) {
+      console.error('登录请求失败:', error)
+      throw error.response?.data || error
+    }
+  },
+
+  // 用户注册
+  register: async (username, password) => {
+    try {
+      const response = await axios.post(`${API_URL}/user/register`, {
+        username,
+        password
+      })
+      return response.data
+    } catch (error) {
+      console.error('注册请求失败:', error)
+      throw error.response?.data || error
+    }
+  },
+
+  // 获取用户信息
+  getUserInfo: async (token) => {
+    try {
+      const response = await axios.get(`${API_URL}/user/info`, {
+        headers: {
+          Authorization: token
+        }
+      })
+      return response.data
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+      throw error.response?.data || error
+    }
+  },
+
+  // 用户登出
+  logout: async (token) => {
+    try {
+      const response = await axios.post(`${API_URL}/user/logout`, null, {
+        headers: {
+          Authorization: token
+        }
+      })
+      return response.data
+    } catch (error) {
+      console.error('登出请求失败:', error)
+      throw error.response?.data || error
+    }
+  }
+}
+
+// 会话管理相关接口
+const conversationApi = {
+  // 创建新会话
+  createConversation: async (aiType, firstMessage = null, groupId = null) => {
+    try {
+      let url = `${API_URL}/conversation/create?aiType=${encodeURIComponent(aiType)}`
+      
+      if (firstMessage) {
+        url += `&firstMessage=${encodeURIComponent(firstMessage)}`
+      }
+      
+      if (groupId) {
+        url += `&groupId=${groupId}`
+      }
+      
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.post(url, null, { headers })
+      return response.data
+    } catch (error) {
+      console.error('创建会话失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 获取用户的会话列表
+  getConversations: async (page = 1, size = 10, groupId = null, aiType = null) => {
+    try {
+      let url = `${API_URL}/conversation/list?page=${page}&size=${size}`
+      
+      if (groupId !== null) {
+        url += `&groupId=${groupId}`
+      }
+      
+      if (aiType !== null) {
+        url += `&aiType=${encodeURIComponent(aiType)}`
+      }
+      
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.get(url, { headers })
+      return response.data
+    } catch (error) {
+      console.error('获取会话列表失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 获取会话消息历史
+  getConversationMessages: async (conversationId) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.get(`${API_URL}/conversation/${conversationId}/messages`, { headers })
+      return response.data
+    } catch (error) {
+      console.error('获取会话消息历史失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 更新会话信息（标题和分组）
+  updateConversation: async (conversationId, title, groupId = null) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.post(`${API_URL}/conversation/update`, {
+        id: conversationId,
+        title,
+        groupId
+      }, { headers })
+      return response.data
+    } catch (error) {
+      console.error('更新会话信息失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 删除会话
+  deleteConversation: async (conversationId) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.delete(`${API_URL}/conversation/${conversationId}`, { headers })
+      return response.data
+    } catch (error) {
+      console.error('删除会话失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 保存会话消息
+  saveMessage: async (conversationId, userMessage, aiResponse, aiType) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.post(`${API_URL}/message/save`, {
+        conversationId,
+        userMessage,
+        aiResponse,
+        aiType
+      }, { headers })
+      return response.data
+    } catch (error) {
+      console.error('保存会话消息失败:', error)
+      throw error.response?.data || error
+    }
+  }
+}
+
+// 会话分组相关接口
+const conversationGroupApi = {
+  // 创建会话分组
+  createGroup: async (name, aiType = null) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.post(`${API_URL}/conversation/group/create`, {
+        name,
+        aiType
+      }, { headers })
+      return response.data
+    } catch (error) {
+      console.error('创建会话分组失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 获取用户的所有会话分组
+  getGroups: async (aiType = null) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      let url = `${API_URL}/conversation/group/list`;
+      
+      // 如果指定了aiType，添加到请求参数
+      if (aiType !== null) {
+        url += `?aiType=${encodeURIComponent(aiType)}`;
+      }
+      
+      const response = await axios.get(url, { headers })
+      return response.data
+    } catch (error) {
+      console.error('获取会话分组列表失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 更新会话分组
+  updateGroup: async (groupId, name) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.post(`${API_URL}/conversation/group/update`, {
+        id: groupId,
+        name
+      }, { headers })
+      return response.data
+    } catch (error) {
+      console.error('更新会话分组失败:', error)
+      throw error.response?.data || error
+    }
+  },
+  
+  // 删除会话分组
+  deleteGroup: async (groupId) => {
+    try {
+      // 获取token并添加到请求头
+      const token = localStorage.getItem('Authorization')
+      const headers = token ? { Authorization: token } : {}
+      
+      const response = await axios.delete(`${API_URL}/conversation/group/${groupId}`, { headers })
+      return response.data
+    } catch (error) {
+      console.error('删除会话分组失败:', error)
+      throw error.response?.data || error
+    }
+  }
+}
+
 // 爱情应用聊天接口 - SSE方式
-export const chatWithLoveApp = (message, chatId, onMessage, onError, onComplete) => {
-  const url = `${API_URL}/ai/love_app/chat/sse?message=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
+export const chatWithLoveApp = (message, chatId, onMessage, onError, onComplete, conversationId = null) => {
+  let url = `${API_URL}/ai/love_app/chat/sse?message=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
+  
+  // 如果有会话ID，添加到请求参数
+  if (conversationId) {
+    url += `&conversationId=${encodeURIComponent(conversationId)}`
+  }
+  
+  // 获取token并添加到请求参数，因为SSE不能在header中传递token
+  const token = localStorage.getItem('Authorization')
+  if (token) {
+    url += `&token=${encodeURIComponent(token)}`
+  }
   
   const eventSource = new EventSource(url)
   let isCompleted = false
@@ -82,7 +352,7 @@ export const chatWithLoveApp = (message, chatId, onMessage, onError, onComplete)
 
 // Manus应用聊天接口 - SSE方式
 export const chatWithManus = (message, onMessage, onError, onComplete) => {
-  const url = `${API_URL}/ai/manus/chat/sse?message=${encodeURIComponent(message)}`
+  let url = `${API_URL}/ai/manus/chat/sse?message=${encodeURIComponent(message)}`
   
   const eventSource = new EventSource(url)
   let isCompleted = false
@@ -151,4 +421,18 @@ export const chatWithManus = (message, onMessage, onError, onComplete) => {
       completeConnection()
     }
   }
-} 
+}
+
+// 将所有导出移到文件末尾
+// 默认导出
+export default {
+  chatWithLoveApp,
+  chatWithManus,
+  generateChatId,
+  authApi,
+  conversationApi,
+  conversationGroupApi
+}
+
+// 命名导出 
+export { conversationApi, conversationGroupApi, authApi } 
