@@ -114,12 +114,24 @@ public class TencentCosService {
     }
 
     /**
-     * 生成文件key，简单地使用目录+文件名
+     * 生成文件key，添加时间戳避免文件名冲突
      * @param fileName 文件名
      * @param directory 目录
      * @return 文件key
      */
     private String generateFileKey(String fileName, String directory) {
+        // 获取文件名和扩展名
+        String name = fileName;
+        String extension = "";
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex > 0) {
+            name = fileName.substring(0, dotIndex);
+            extension = fileName.substring(dotIndex);
+        }
+
+        // 添加时间戳
+        String timestampedName = name + "_" + System.currentTimeMillis() + extension;
+
         // 拼接目录和文件名
         StringBuilder key = new StringBuilder();
         if (directory != null && !directory.isEmpty()) {
@@ -128,9 +140,9 @@ public class TencentCosService {
             }
             key.append(directory);
         }
-        
-        key.append(fileName);
-        
+
+        key.append(timestampedName);
+
         return key.toString();
     }
 }

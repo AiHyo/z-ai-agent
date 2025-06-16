@@ -43,6 +43,9 @@ public abstract class BaseAgent {
     // Memory 记忆 (需要自主维护会话上下文)
     private List<Message> messageList = new ArrayList<>();
 
+    // 存储当前思考结果
+    private String thinkResult;
+
     /**
      * 运行代理
      *
@@ -67,19 +70,22 @@ public abstract class BaseAgent {
         // 3. 开始执行
         try {
             // 循环执行，直到达到最大步骤数或状态变为 FINISHED
+            int i = 0;
             while (state != AgentState.FINISHED) {
-                if (currentStep >= maxSteps) {
+                i += 1;
+                currentStep = i;
+                // 若果超过最大步骤数，则结束执行
+                if (currentStep > maxSteps) {
                     log.warn("Reached maximum steps: {}", maxSteps);
                     this.state = AgentState.FINISHED;
-                    // 记录结果，结束
                     results.add("Reached maximum steps, please try again with a different prompt.");
                     break;
                 }
-                // 更新当前步骤
-                this.currentStep++;
                 // 执行单个步骤
-                String stepResult = step();
-                String result = "Step " + currentStep + ": " + stepResult;
+                String[] stepResult = step();
+                // 拼接结果
+                String stepResultStr = String.join("\n", stepResult);
+                String result = "Step " + currentStep + ": " + stepResultStr;
                 // 记录结果
                 results.add(result);
             }
@@ -119,48 +125,48 @@ public abstract class BaseAgent {
                     sseEmitter.complete();
                     return;
                 }
-                // 2. 准备执行
-                // 设置状态，并记录消息，创建结果列表
-                this.state = AgentState.RUNNING;
-                this.messageList.add(new UserMessage(userPrompt));
-                List<String> results = new ArrayList<>();
-                // 3. 开始执行
-                try {
-                    // 循环执行，直到达到最大步骤数或状态变为 FINISHED
-                    while (state != AgentState.FINISHED) {
-                        if (currentStep >= maxSteps) {
-                            log.warn("Reached maximum steps: {}", maxSteps);
-                            this.state = AgentState.FINISHED;
-                            // 发送结果到客户端，结束
-                            sseEmitter.send("Reached maximum steps, please try again with a different prompt.");
-                            break;
-                        }
-                        // 更新当前步骤
-                        this.currentStep++;
-                        // 执行单个步骤
-                        String stepResult = step();
-                        String result = "Step " + currentStep + ": " + stepResult;
-                        // 记录结果
-                        results.add(result);
-                        sseEmitter.send(result); // 发送当前步骤结果到客户端
+            } catch (Exception e){
+                sseEmitter.completeWithError(e);
+            }
+            // 2. 准备执行
+            // 设置状态，并记录消息，创建结果列表
+            this.state = AgentState.RUNNING;
+            this.messageList.add(new UserMessage(userPrompt));
+            // 3. 开始执行
+            try {
+                int i = 0;
+                // 循环执行，直到达到最大步骤数或状态变为 FINISHED
+                while (state != AgentState.FINISHED) {
+                    i += 1;
+                    currentStep = i;
+                    // 如果超过最大步骤数，则结束执行
+                    if (currentStep > maxSteps) {
+                        log.warn("Reached maximum steps: {}", maxSteps);
+                        this.state = AgentState.FINISHED;
+                        sseEmitter.send("Reached maximum steps, please try again with a different prompt.");
+                        break;
                     }
-                    // 结束后，发送完成消息
-                    sseEmitter.complete();
-                } catch (Exception e) {
-                    this.state = AgentState.ERROR;
-                    log.error("Error occurred during agent execution: {}", e.getMessage(), e);
-                    try {
-                        sseEmitter.send("An error occurred during execution: " + e.getMessage());
-                        sseEmitter.complete();
-                    } catch (Exception ex) {
-                        sseEmitter.completeWithError(ex);
+                    // 执行单个步骤，发送结果到客户端[thinkResult + actResult]
+                    String[] stepResult = step();
+                    sseEmitter.send("Step " + currentStep + ": " );
+                    for (String result : stepResult) {
+                        sseEmitter.send(result);
                     }
-                } finally {
-                    // 4. 清理资源
-                    this.cleanup();
                 }
+                // 结束后，发送完成消息
+                sseEmitter.complete();
             } catch (Exception e) {
-                sseEmitter.completeWithError(e); // 发送错误信号并终止连接
+                this.state = AgentState.ERROR;
+                log.error("Error occurred during agent execution: {}", e.getMessage(), e);
+                try {
+                    sseEmitter.send("An error occurred during execution: " + e.getMessage());
+                    sseEmitter.complete();
+                } catch (Exception ex) {
+                    sseEmitter.completeWithError(ex);
+                }
+            } finally {
+                // 4. 清理资源
+                this.cleanup();
             }
         });
 
@@ -169,7 +175,7 @@ public abstract class BaseAgent {
             this.state = AgentState.ERROR; // 超时视为错误状态
             this.cleanup();
             log.warn("SSE emitter timed out");
-            sseEmitter.complete();
+            // sseEmitter.complete();
         });
 
         sseEmitter.onCompletion(()->{
@@ -184,105 +190,9 @@ public abstract class BaseAgent {
     }
 
     /**
-     * 使用自定义SseEmitter执行流式响应
-     * @param userPrompt 用户提示
-     * @param emitter 自定义的SseEmitter
-     * @return SseEmitter实例
-     */
-    public SseEmitter runStreamWithEmitter(String userPrompt, SseEmitter emitter) {
-        // 1. 校验
-        if (this.state != AgentState.IDLE) {
-            log.warn("Agent is not idle, current state: {}", this.state);
-            try {
-                emitter.send("Agent is busy, please try again later.");
-                emitter.complete();
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-            return emitter;
-        }
-        if (StrUtil.isBlank(userPrompt)) {
-            log.warn("User prompt is empty");
-            try {
-                emitter.send("User prompt cannot be empty.");
-                emitter.complete();
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-            return emitter;
-        }
-
-        // 2. 准备执行
-        this.state = AgentState.RUNNING;
-        this.messageList.add(new UserMessage(userPrompt));
-
-        // 3. 异步执行
-        CompletableFuture.runAsync(() -> {
-            try {
-                // 直接发送第一条消息
-                emitter.send("正在处理您的请求...\n");
-
-                // 循环执行，直到达到最大步骤数或状态变为 FINISHED
-                while (state != AgentState.FINISHED) {
-                    if (currentStep >= maxSteps) {
-                        log.warn("Reached maximum steps: {}", maxSteps);
-                        this.state = AgentState.FINISHED;
-                        emitter.send("\n已达到最大步骤限制，请尝试更明确的提问。");
-                        break;
-                    }
-
-                    // 更新当前步骤
-                    this.currentStep++;
-
-                    // 执行单个步骤
-                    String stepResult = step();
-                    
-                    // 如果不是第一步，添加分隔符增强可读性
-                    if (currentStep > 1) {
-                        emitter.send("\n");
-                    }
-                    
-                    emitter.send(stepResult);
-                }
-                
-                // 完成处理
-                emitter.complete();
-            } catch (Exception e) {
-                this.state = AgentState.ERROR;
-                log.error("Error occurred during agent execution: {}", e.getMessage(), e);
-                try {
-                    emitter.send("\n执行过程中出现错误: " + e.getMessage());
-                    emitter.complete();
-                } catch (Exception ex) {
-                    emitter.completeWithError(ex);
-                }
-            } finally {
-                this.cleanup();
-            }
-        });
-
-        // 设置emitter的超时和完成回调
-        emitter.onTimeout(() -> {
-            this.state = AgentState.ERROR;
-            this.cleanup();
-            log.warn("SSE emitter timed out");
-        });
-
-        emitter.onCompletion(() -> {
-            if (this.state == AgentState.RUNNING) {
-                this.state = AgentState.FINISHED;
-                log.info("SSE emitter completed successfully");
-            }
-            this.cleanup();
-        });
-
-        return emitter;
-    }
-
-    /**
      * 单个步骤
      */
-    public abstract String step();
+    public abstract String[] step();
 
     /**
      * 清理资源

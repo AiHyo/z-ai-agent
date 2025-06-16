@@ -34,16 +34,21 @@ public abstract class ReActAgent extends BaseAgent{
      * @return 步骤执行结果
      */
     @Override
-    public String step() {
+    public String[] step() {
         try {
             // 根据思考结果决定是否需要行动
             if (think()) {
-                return act();
+                String actResult = act();
+                return new String[]{getThinkResult(), actResult};
             }
-            return "思考完成 - 无需行动";
+            // 思考完成无需行动时，设置状态为FINISHED
+            this.setState(AgentState.FINISHED);
+            return new String[]{getThinkResult(), "思考完成 - 无需行动"};
         } catch (Exception e) {
             log.error("执行步骤时发生错误: {}", e.getMessage(), e);
-            return "执行步骤时发生错误: " + e.getMessage();
+            // 发生异常时，设置状态为ERROR或FINISHED
+            this.setState(AgentState.ERROR);
+            return new String[]{"执行步骤时发生错误: " + e.getMessage()};
         }
     }
 

@@ -55,7 +55,7 @@ public class TooCallAgent extends ReActAgent {
     }
 
     /**
-     * 判断是否需要执行act()
+     * 判断是否需要执行act()，根据prompt[messageList + nextStepPrompt]，systemPrompt,availableTools，调用ai => 获取需要的工具
      *
      * @return boolean 是否需要行动，true表示需要行动，false 表示不需要行动
      */
@@ -70,23 +70,23 @@ public class TooCallAgent extends ReActAgent {
             messageList.add(new UserMessage(nextStepPrompt));
         }
         try {
-            // 2. 调用 AI 大模型，获取工具调用结果
+            // 2. 调用 AI 大模型，返回需要调用的工具列表，[传入自定义的chatOptions配置，禁用 spring ai 内置的工具调用机制]
             Prompt prompt = new Prompt(messageList, chatOptions);
             ChatResponse chatResponse = this.getChatClient().prompt(prompt)
                     .system(this.getSystemPrompt())
                     .tools(availableTools)
                     .call()
                     .chatResponse();
-            // 记录响应 [在act() 方法中需要使用]
+            // 记录 ai 响应 => 需要调用的工具列表[在act() 方法中需要使用]，若不为空，再act()
             this.toolCallChatResponse = chatResponse;
             // 3. 解析工具调用结果，获取要调用的工具
             // 从chatResponse中获取助手消息assistantMessage
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
             // 从assistantMessage中获取 ①输出提示信息result ②工具调用列表toolCallList
             String result = assistantMessage.getText();
+            this.setThinkResult(result); // 记录AI思考结果，用于返回
+            log.info("AI 思考过程：{}",  result);
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
-            log.info("{}的思考过程：{}", name, result);
-            log.info("{}的思考过程包含的工具调用：", name);
             String toolCallInfo = toolCallList.stream()
                     .map(toolCall -> String.format("工具：%s, 参数：%s", toolCall.name(), toolCall.arguments()))
                     .collect(Collectors.joining("\n"));
@@ -95,20 +95,24 @@ public class TooCallAgent extends ReActAgent {
             if (toolCallList.isEmpty()) {
                 // 不调用工具时，需要手动记录助手消息
                 messageList.add(assistantMessage);
+                // 多重保险：当没有工具需要调用时，设置状态为FINISHED
+                this.setState(AgentState.FINISHED);
                 return false;
             } else {
-                // 在后续act调用工具时会再记录这里的助手消息
+                // 直接返回，不用手动记录助手消息：在act时会记录
                 return true;
             }
         } catch (Exception e) {
             log.error("{}的思考过程遇到了问题：{}", name, e.getMessage());
             messageList.add(new AssistantMessage("处理时遇到了错误：" + e.getMessage()));
+            // 多重保险：发生异常时，设置状态为ERROR
+            this.setState(AgentState.ERROR);
             return false;
         }
     }
 
     /**
-     * 执行工具调用并处理结果
+     * 执行工具调用并处理结果【更新消息列表，返回此次工具调用的结果】
      *
      * @return 执行结果
      */

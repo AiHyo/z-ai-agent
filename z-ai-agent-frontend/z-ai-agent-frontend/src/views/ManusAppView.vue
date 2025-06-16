@@ -1,82 +1,25 @@
 <template>
-  <div :class="containerClasses">
+  <div class="chat-container">
     <div class="cyber-grid"></div>
-    
-    <!-- 会话侧边栏 -->
-    <ConversationSidebar 
-      v-if="isLoggedIn"
-      aiType="manus"
-      :initialConversationId="null"
-      @update:collapsed="updateSidebarState"
-      @conversation-selected="() => {}"
-      @conversation-created="() => {}"
-      disabled
-    />
-    
-    <!-- 登录提示 -->
-    <div v-if="!isLoggedIn && showLoginNotice" class="login-notice">
-      <p>登录后可保存对话记录</p>
-      <div class="login-notice-actions">
-        <button @click="showLoginForm">登录</button>
-        <button @click="showRegisterForm">注册</button>
-        <button @click="dismissLoginNotice" class="dismiss-btn">X</button>
-      </div>
-    </div>
-    
-    <!-- 添加页面右上角的用户登录状态和头像 -->
-    <div class="header-nav">
-      <!-- 右侧用户信息/登录按钮 -->
-      <div class="user-section">
-        <!-- 已登录状态 -->
-        <div v-if="isLoggedIn" class="user-info">
-          <div class="user-avatar">{{ usernameInitial }}</div>
-          <span class="username">{{ username }}</span>
-          <button @click="handleLogout" class="logout-btn">退出</button>
-        </div>
-        
-        <!-- 未登录状态 -->
-        <div v-else class="auth-buttons">
-          <button @click="showLoginForm" class="auth-button login-button">
-            登录
-            <div class="button-glow"></div>
-          </button>
-          <button @click="showRegisterForm" class="auth-button register-button">
-            注册
-            <div class="button-glow"></div>
-          </button>
-        </div>
-      </div>
-    </div>
-    
-    <!-- 登录/注册弹窗 -->
-    <teleport to="body">
-      <div v-if="showAuthModal" class="modal-backdrop" @click="closeModal">
-        <div class="modal-content" @click.stop>
-          <button class="close-button" @click="closeModal">×</button>
-          <AuthComponent 
-            :activeTab="activeAuthTab" 
-            @close="closeModal" 
-            @login-success="handleLoginSuccess" 
-          />
-        </div>
-      </div>
-    </teleport>
-    
+
     <div class="chat-header">
       <h1>AI超级智能体</h1>
     </div>
-    
+
     <div class="chat-messages" ref="messagesContainer">
-      <div 
-        v-for="(message, index) in messages" 
-        :key="index" 
+      <div
+        v-for="(message, index) in messages"
+        :key="index"
         :class="['message', message.isUser ? 'message-user' : 'message-ai']"
       >
         <div v-if="!message.isUser" class="message-avatar">
           <AiAvatar type="manus" />
         </div>
         <div class="message-content">
-          {{ message.content }}
+          <!-- 使用v-html渲染处理后的消息内容 -->
+          <div class="message-text" v-html="formatMessage(message.content)"></div>
+
+
           <span v-if="message.isTyping" class="typing-indicator">
             <span class="dot"></span>
             <span class="dot"></span>
@@ -88,11 +31,11 @@
         </div>
       </div>
     </div>
-    
+
     <div class="chat-input">
-      <input 
-        v-model="inputMessage" 
-        placeholder="请输入您的问题..." 
+      <input
+        v-model="inputMessage"
+        placeholder="请输入您的问题..."
         @keyup.enter="sendMessage"
         :disabled="isWaitingForResponse"
       />
@@ -100,26 +43,22 @@
         {{ isWaitingForResponse ? '等待回复...' : '发送' }}
       </button>
     </div>
-    
+
     <TheFooter />
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { chatWithManus, authApi } from '@/services/api'
+import { ref, onMounted, watch, nextTick } from 'vue'
+import { chatWithManus } from '../services/api'
 import AiAvatar from '../components/AiAvatar.vue'
 import TheFooter from '../components/TheFooter.vue'
-import ConversationSidebar from '../components/ConversationSidebar.vue'
-import AuthComponent from '../components/AuthComponent.vue'
 
 export default {
   name: 'ManusAppView',
   components: {
     AiAvatar,
     TheFooter,
-    ConversationSidebar,
-    AuthComponent
   },
   setup() {
     const inputMessage = ref('')
@@ -127,102 +66,8 @@ export default {
     const messagesContainer = ref(null)
     const isWaitingForResponse = ref(false)
     let chatConnection = null
-    
-    // 侧边栏折叠状态
-    const sidebarCollapsed = ref(false)
-    
-    // 监听侧边栏折叠状态变化
-    const updateSidebarState = (collapsed) => {
-      sidebarCollapsed.value = collapsed
-    }
-    
-    // 用户登录相关状态
-    const showAuthModal = ref(false)
-    const activeAuthTab = ref('login')
-    const isLoggedIn = ref(false)
-    const username = ref('')
-    const showLoginNotice = ref(false)
-    
-    // 获取用户名首字母作为头像
-    const usernameInitial = computed(() => {
-      return username.value ? username.value.charAt(0).toUpperCase() : '?'
-    })
-    
-    // 容器类计算属性，根据侧边栏状态更新
-    const containerClasses = computed(() => {
-      return {
-        'chat-container': true,
-        'sidebar-collapsed': sidebarCollapsed.value
-      }
-    })
-    
-    // 显示登录表单
-    const showLoginForm = () => {
-      activeAuthTab.value = 'login'
-      showAuthModal.value = true
-      showLoginNotice.value = false
-    }
-    
-    // 显示注册表单
-    const showRegisterForm = () => {
-      activeAuthTab.value = 'register'
-      showAuthModal.value = true
-      showLoginNotice.value = false
-    }
-    
-    // 关闭登录提示
-    const dismissLoginNotice = () => {
-      showLoginNotice.value = false
-    }
-    
-    // 检查登录状态
-    const checkLoginStatus = async () => {
-      try {
-        const response = await authApi.checkLoginStatus()
-        isLoggedIn.value = response.data
-        
-        if (isLoggedIn.value) {
-          const userInfo = await authApi.getUserInfo()
-          username.value = userInfo.data.nickname || userInfo.data.username
-        } else {
-          // 如果未登录，则显示登录提示
-          showLoginNotice.value = true
-        }
-      } catch (error) {
-        console.error('检查登录状态失败:', error)
-        isLoggedIn.value = false
-      }
-    }
-    
-    // 处理登录成功
-    const handleLoginSuccess = async (userData) => {
-      isLoggedIn.value = true
-      username.value = userData.nickname || userData.username
-      showAuthModal.value = false
-      showLoginNotice.value = false
-    }
-    
-    // 处理登出
-    const handleLogout = async () => {
-      try {
-        await authApi.logout()
-        isLoggedIn.value = false
-        username.value = ''
-        // 清空消息记录
-        messages.value = [{
-          content: '你好，我是AI超级智能体，我可以协助你完成各种任务。有什么我能帮到你的吗？',
-          isUser: false,
-          isTyping: false
-        }]
-      } catch (error) {
-        console.error('登出失败:', error)
-      }
-    }
-    
-    // 关闭登录弹窗
-    const closeModal = () => {
-      showAuthModal.value = false
-    }
+    let connectionRetries = 0
+    const MAX_RETRIES = 3
 
     // 自动滚动到底部
     const scrollToBottom = async () => {
@@ -244,13 +89,13 @@ export default {
         isUser: false,
         isTyping: false
       })
-      
+
       // 创建网格背景效果
       initCyberGrid();
-      
+
       // 设置页面标题和元数据
       document.title = 'AI超级智能体 - 您的多功能智能助手'
-      
+
       // 创建meta描述标签
       if (!document.querySelector('meta[name="description"]')) {
         const metaDesc = document.createElement('meta')
@@ -258,11 +103,8 @@ export default {
         metaDesc.content = 'AI超级智能体是您的多功能助手，可以回答问题、提供建议、完成任务，让生活更智能。'
         document.head.appendChild(metaDesc)
       }
-      
-      // 检查用户登录状态
-      checkLoginStatus()
     })
-    
+
     // 创建网格背景
     const initCyberGrid = () => {
       if (typeof document !== 'undefined') {
@@ -274,50 +116,103 @@ export default {
             line.style.left = `${Math.random() * 100}%`;
             line.style.animationDelay = `${Math.random() * 5}s`;
             line.style.height = `${Math.random() * 30 + 70}%`;
-            
+
             grid.appendChild(line);
           }
         }
       }
     }
 
-    // 发送消息
-    const sendMessage = () => {
-      if (!inputMessage.value.trim() || isWaitingForResponse.value) return
+    // 解析工具使用信息
+    const parseToolUsage = (content) => {
+      // 检测是否包含工具调用信息
+      if (content.includes('Step') && content.includes('工具：')) {
+        const toolUsage = [];
+        let currentToolIndex = -1;
 
-      // 添加用户消息
-      const userMessage = inputMessage.value
-      messages.value.push({
-        content: userMessage,
-        isUser: true,
-        isTyping: false
-      })
-      
-      // 清空输入框并设置等待状态
-      inputMessage.value = ''
-      isWaitingForResponse.value = true
-      
-      // 关闭上一个连接（如果存在）
-      if (chatConnection) {
-        chatConnection.close()
+        // 解析工具使用信息
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+
+          // 检测工具调用行
+          if (line.includes('工具：')) {
+            const toolMatch = line.match(/工具：(\w+)/);
+            if (toolMatch) {
+              const toolName = toolMatch[1];
+
+              // 查找工具结果（通常在后面几行）
+              let resultLines = [];
+              let j = i + 1;
+              while (j < lines.length && !lines[j].includes('Step') && !lines[j].includes('工具：')) {
+                resultLines.push(lines[j]);
+                j++;
+              }
+
+              toolUsage.push({
+                toolName: toolName,
+                result: resultLines.join('\n')
+              });
+
+              currentToolIndex = toolUsage.length - 1;
+            }
+          }
+        }
+
+        return {
+          toolUsage,
+          currentToolIndex
+        };
       }
-      
-      // 添加AI消息占位符
-      messages.value.push({
-        content: '',
-        isUser: false,
-        isTyping: true
-      })
-      
-      let aiResponseIndex = messages.value.length - 1
-      
+
+      return null;
+    }
+
+    // 建立聊天连接
+    const establishConnection = (userMessage, aiResponseIndex) => {
+      console.log(`建立连接，尝试第 ${connectionRetries + 1} 次`)
+
+      // 如果已经重试超过最大次数，则放弃
+      if (connectionRetries >= MAX_RETRIES) {
+        messages.value[aiResponseIndex].content = '抱歉，连接多次失败，请稍后再试。'
+        messages.value[aiResponseIndex].isTyping = false
+        isWaitingForResponse.value = false
+        connectionRetries = 0
+        return
+      }
+
+      // 显示重试状态
+      if (connectionRetries > 0) {
+        messages.value[aiResponseIndex].content += `\n[系统: 正在重新连接... (${connectionRetries}/${MAX_RETRIES})]`
+      }
+
       // 建立新连接并发送消息
       chatConnection = chatWithManus(
         userMessage,
         (data) => {
           // 更新AI消息内容
+          if (connectionRetries > 0 && messages.value[aiResponseIndex].content.includes('[系统: 正在重新连接')) {
+            messages.value[aiResponseIndex].content = messages.value[aiResponseIndex].content.split('\n').filter(line => !line.includes('[系统: 正在重新连接')).join('\n')
+          }
+
           messages.value[aiResponseIndex].content += data
           messages.value[aiResponseIndex].isTyping = true
+
+          // 强制Vue更新视图
+          nextTick(() => {
+            scrollToBottom()
+          })
+
+          // 解析工具使用信息并更新
+          const toolInfo = parseToolUsage(messages.value[aiResponseIndex].content);
+          if (toolInfo) {
+            messages.value[aiResponseIndex].toolUsage = toolInfo.toolUsage;
+            messages.value[aiResponseIndex].currentToolIndex = toolInfo.currentToolIndex;
+          }
+
+          // 收到消息后重置重试计数
+          connectionRetries = 0
+
           // 重置任何可能存在的超时检测
           if (timeoutCheck) {
             clearTimeout(timeoutCheck)
@@ -326,16 +221,28 @@ export default {
         },
         (error) => {
           console.error('聊天出错:', error)
-          // 只在真正错误的情况下才显示错误信息
-          messages.value[aiResponseIndex].content = '抱歉，连接出现问题，请稍后再试。'
-          messages.value[aiResponseIndex].isTyping = false
-          isWaitingForResponse.value = false
+
+          // 尝试重新连接
+          connectionRetries++
+          if (connectionRetries <= MAX_RETRIES) {
+            console.log(`连接失败，${connectionRetries}秒后重试...`)
+            setTimeout(() => {
+              establishConnection(userMessage, aiResponseIndex)
+            }, connectionRetries * 1000) // 递增延迟重试
+          } else {
+            // 重试次数用完，显示错误
+            messages.value[aiResponseIndex].content = '抱歉，连接多次失败，请稍后再试。'
+            messages.value[aiResponseIndex].isTyping = false
+            isWaitingForResponse.value = false
+            connectionRetries = 0
+          }
         },
         () => {
           // 消息接收完成回调
           console.log('消息接收完成')
           messages.value[aiResponseIndex].isTyping = false
           isWaitingForResponse.value = false
+          connectionRetries = 0
           if (timeoutCheck) {
             clearTimeout(timeoutCheck)
             clearInterval(timeoutCheck)
@@ -343,39 +250,244 @@ export default {
           chatConnection = null
         }
       )
-      
-      // 改进超时检测机制 - 作为备用方案
+
+      // 改进超时检测机制
       let timeoutCheck = null;
       const checkMessageComplete = () => {
         if (chatConnection) {
           let lastContent = messages.value[aiResponseIndex].content;
           let noChangeCounter = 0;
-          
+          let isThinking = false;
+
           // 使用间隔检查，而不是嵌套setTimeout
           timeoutCheck = setInterval(() => {
             // 检查内容是否有变化
             if (lastContent === messages.value[aiResponseIndex].content) {
               noChangeCounter++;
-              
-              // 如果连续5次检查内容没变化，则认为流已结束
-              if (noChangeCounter >= 5) {
-                clearInterval(timeoutCheck);
-                messages.value[aiResponseIndex].isTyping = false;
-                isWaitingForResponse.value = false;
-                chatConnection.close();
-                chatConnection = null;
+
+              // 如果内容包含正在思考的提示，重置计数器
+              if (messages.value[aiResponseIndex].content.includes('Step') &&
+                !messages.value[aiResponseIndex].content.includes('思考完成')) {
+                isThinking = true;
+                // 显示思考状态
+                if (noChangeCounter % 5 === 0) {
+                  console.log('AI正在思考中...');
+                  // 每5秒更新一次思考状态提示
+                  if (!messages.value[aiResponseIndex].content.includes('[AI正在思考中')) {
+                    messages.value[aiResponseIndex].content += '\n[AI正在思考中...]'
+                  } else {
+                    // 更新已有的思考提示
+                    const contentLines = messages.value[aiResponseIndex].content.split('\n')
+                    for (let i = contentLines.length - 1; i >= 0; i--) {
+                      if (contentLines[i].includes('[AI正在思考中')) {
+                        contentLines[i] = '[AI正在思考中' + '.'.repeat((noChangeCounter % 10)) + ']'
+                        break
+                      }
+                    }
+                    messages.value[aiResponseIndex].content = contentLines.join('\n')
+                  }
+                }
+                // AI思考过程中，超时阈值更高
+                if (noChangeCounter >= 600) { // 延长到600秒(10分钟)无响应才断开
+                  console.log('AI思考时间过长，关闭连接');
+                  clearInterval(timeoutCheck);
+
+                  // 移除思考中提示
+                  messages.value[aiResponseIndex].content = messages.value[aiResponseIndex].content.split('\n').filter(line => !line.includes('[AI正在思考中')).join('\n')
+
+                  // 添加中断提示
+                  messages.value[aiResponseIndex].content += '\n[系统: 思考时间过长，连接已重置]'
+                  messages.value[aiResponseIndex].isTyping = false;
+
+                  // 尝试重新连接
+                  connectionRetries++
+                  chatConnection.close();
+                  chatConnection = null
+
+                  if (connectionRetries <= MAX_RETRIES) {
+                    setTimeout(() => {
+                      establishConnection(userMessage, aiResponseIndex)
+                    }, connectionRetries * 1000)
+                  } else {
+                    isWaitingForResponse.value = false
+                    connectionRetries = 0
+                  }
+                }
+              } else {
+                // 普通内容，使用正常超时阈值
+                // 如果连续180次(180秒)检查内容没变化，则认为流已结束
+                if (noChangeCounter >= 180) {
+                  console.log('内容长时间无变化，关闭连接');
+                  clearInterval(timeoutCheck);
+                  messages.value[aiResponseIndex].isTyping = false;
+                  isWaitingForResponse.value = false;
+                  chatConnection.close();
+                  chatConnection = null;
+                }
               }
             } else {
               // 内容有变化，重置计数器
+              // 移除思考中提示
+              if (messages.value[aiResponseIndex].content.includes('[AI正在思考中')) {
+                messages.value[aiResponseIndex].content = messages.value[aiResponseIndex].content.split('\n').filter(line => !line.includes('[AI正在思考中')).join('\n')
+              }
+
               lastContent = messages.value[aiResponseIndex].content;
               noChangeCounter = 0;
             }
           }, 1000);
         }
       }
-      
+
       checkMessageComplete()
     }
+
+    // 发送消息
+    const sendMessage = () => {
+      if (!inputMessage.value.trim() || isWaitingForResponse.value) return;
+
+      // 添加用户消息
+      const userMessage = inputMessage.value;
+      messages.value.push({
+        content: userMessage,
+        isUser: true,
+        isTyping: false,
+        toolUsage: [],
+        currentToolIndex: -1
+      });
+
+      // 清空输入框并设置等待状态
+      inputMessage.value = '';
+      isWaitingForResponse.value = true;
+
+      // 关闭上一个连接（如果存在）
+      if (chatConnection) {
+        try {
+          chatConnection.close();
+        } catch (e) {
+          console.error('关闭上一个连接时出错:', e);
+        }
+        chatConnection = null;
+      }
+
+      // 添加AI消息占位符
+      messages.value.push({
+        content: '',
+        isUser: false,
+        isTyping: true,
+        toolUsage: [],
+        currentToolIndex: -1
+      });
+
+      let aiResponseIndex = messages.value.length - 1;
+      let hasReceivedData = false;
+
+      // 设置超时检测 - 延长到3分钟
+      const timeoutId = setTimeout(() => {
+        if (!hasReceivedData && isWaitingForResponse.value) {
+          console.log('连接超时，未收到任何数据');
+          messages.value[aiResponseIndex].content = '抱歉，服务器响应超时，请稍后再试。';
+          messages.value[aiResponseIndex].isTyping = false;
+          isWaitingForResponse.value = false;
+
+          if (chatConnection) {
+            try {
+              chatConnection.close();
+            } catch (e) {
+              console.error('关闭连接时出错:', e);
+            }
+            chatConnection = null;
+          }
+        }
+      }, 180000); // 3分钟超时 (180000毫秒)
+
+      try {
+        // 建立新连接并发送消息
+        chatConnection = chatWithManus(
+          userMessage,
+          (data) => {
+            // 标记已收到数据
+            hasReceivedData = true;
+
+            // 更新AI消息内容
+            messages.value[aiResponseIndex].content += data;
+            messages.value[aiResponseIndex].isTyping = true;
+
+            // 解析工具使用信息并更新
+            const toolInfo = parseToolUsage(messages.value[aiResponseIndex].content);
+            if (toolInfo) {
+              messages.value[aiResponseIndex].toolUsage = toolInfo.toolUsage;
+              messages.value[aiResponseIndex].currentToolIndex = toolInfo.currentToolIndex;
+            }
+
+            // 强制滚动到底部
+            scrollToBottom();
+          },
+          (error) => {
+            console.error('聊天出错:', error);
+
+            // 如果已经收到了一些数据，可能是正常结束
+            if (hasReceivedData) {
+              console.log('已接收部分数据，可能是正常结束');
+              messages.value[aiResponseIndex].isTyping = false;
+              isWaitingForResponse.value = false;
+            } else {
+              // 真正的错误情况
+              messages.value[aiResponseIndex].content = '抱歉，服务器响应出错，请稍后再试。';
+              messages.value[aiResponseIndex].isTyping = false;
+              isWaitingForResponse.value = false;
+            }
+
+            clearTimeout(timeoutId);
+            chatConnection = null;
+          },
+          () => {
+            // 消息接收完成回调
+            console.log('消息接收完成');
+            messages.value[aiResponseIndex].isTyping = false;
+            isWaitingForResponse.value = false;
+            clearTimeout(timeoutId);
+            chatConnection = null;
+
+            // 强制滚动到底部
+            scrollToBottom();
+          }
+        );
+      } catch (e) {
+        console.error('创建SSE连接时出错:', e);
+        messages.value[aiResponseIndex].content = '抱歉，连接服务器时出错，请稍后再试。';
+        messages.value[aiResponseIndex].isTyping = false;
+        isWaitingForResponse.value = false;
+        clearTimeout(timeoutId);
+      }
+    }
+
+    // 改进的格式化消息函数
+    const formatMessage = (content) => {
+      if (!content) return '';
+
+      // 保留原始的Step格式
+      content = content.replace(/Step (\d+):/g, '<strong>Step $1:</strong>');
+
+      // 处理Markdown链接格式 [文本](链接)
+      content = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+        // 确保URL不包含结尾的逗号或括号
+        let cleanUrl = url;
+        if (cleanUrl.endsWith(',') || cleanUrl.endsWith(')')) {
+          cleanUrl = cleanUrl.slice(0, -1);
+        }
+        return `<a href="${cleanUrl}" target="_blank">${text}</a>`;
+      });
+
+      // 处理纯URL链接，但排除已经处理过的链接
+      content = content.replace(
+        /(https?:\/\/[^\s<>"']+)(?![^<>]*>|[^<>]*<\/a>)/g,
+        '<a href="$1" target="_blank">$1</a>'
+      );
+
+      // 最后将\n替换为<br>
+      return content.replace(/\n/g, '<br>');
+    };
 
     return {
       inputMessage,
@@ -383,22 +495,7 @@ export default {
       messagesContainer,
       isWaitingForResponse,
       sendMessage,
-      // 新增返回值
-      sidebarCollapsed,
-      containerClasses,
-      isLoggedIn,
-      username,
-      usernameInitial,
-      showAuthModal,
-      activeAuthTab,
-      showLoginNotice,
-      showLoginForm,
-      showRegisterForm,
-      dismissLoginNotice,
-      handleLoginSuccess,
-      handleLogout,
-      closeModal,
-      updateSidebarState
+      formatMessage
     }
   }
 }
@@ -412,12 +509,6 @@ export default {
   color: #f0f0f0;
   display: flex;
   flex-direction: column;
-  padding-left: 0;
-  transition: padding-left 0.3s ease;
-}
-
-.chat-container:not(.sidebar-collapsed) {
-  padding-left: 280px;
 }
 
 .cyber-grid {
@@ -430,258 +521,275 @@ export default {
   overflow: hidden;
 }
 
-/* 登录提示样式 */
-.login-notice {
-  position: fixed;
-  top: 70px;
-  right: 20px;
-  background-color: rgba(20, 30, 60, 0.9);
-  border: 1px solid #4a55a0;
-  border-radius: 5px;
-  padding: 15px;
-  z-index: 100;
-  box-shadow: 0 0 20px rgba(83, 100, 255, 0.3);
-  max-width: 300px;
-}
-
-.notice-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.notice-title {
-  font-size: 18px;
-  font-weight: bold;
-  color: #7a85ff;
-}
-
-.notice-text {
-  font-size: 14px;
-  color: #f0f0f0;
-}
-
-.notice-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.login-btn, .register-btn {
-  padding: 8px 15px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.3s ease;
-}
-
-.login-btn {
-  background-color: #4a55a0;
-  color: white;
-}
-
-.register-btn {
-  background-color: transparent;
-  border: 1px solid #4a55a0;
-  color: #7a85ff;
-}
-
-.dismiss-btn {
-  background-color: transparent;
-  border: none;
-  color: #7a85ff;
-  text-decoration: underline;
-  cursor: pointer;
-  margin-top: 5px;
-  align-self: flex-end;
-  font-size: 12px;
-}
-
-/* 用户信息/登录按钮样式 */
-.header-nav {
+.grid-line {
   position: absolute;
-  top: 20px;
-  right: 30px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  top: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.5), transparent);
+  animation: grid-line-animation 15s infinite;
 }
 
-.user-section {
+.chat-header {
+  text-align: center;
+  padding: 1rem;
   position: relative;
+  z-index: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.user-info {
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.chat-input {
   display: flex;
-  align-items: center;
+  padding: 1rem;
+  background-color: rgba(20, 20, 40, 0.5);
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(30, 30, 50, 0.6);
+  color: white;
+  margin-right: 0.5rem;
+}
+
+.chat-input button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  border: none;
+  background: linear-gradient(to right, #1a56ff, #00c6ff);
+  color: white;
+  font-weight: bold;
   cursor: pointer;
-  position: relative;
+  transition: all 0.2s ease;
 }
 
-.user-info:hover .dropdown-menu {
-  display: block;
+.chat-input button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 198, 255, 0.4);
 }
 
-.user-avatar {
+@keyframes grid-line-animation {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.message {
+  display: flex;
+  margin: 1.5rem 0;
+  align-items: flex-start;
+  padding: 0;
+  background: transparent;
+}
+
+.message-avatar {
   width: 40px;
   height: 40px;
+  flex-shrink: 0;
+  margin: 0 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  top: 0.5rem;
+}
+
+.message-content {
+  padding: 1rem;
+  border-radius: 12px;
+  max-width: 70%;
+  line-height: 1.5;
+  position: relative;
+  white-space: pre-wrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.message-user {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  background: transparent;
+}
+
+.message-ai {
+  justify-content: flex-start;
+  background: transparent;
+}
+
+.message-user .message-content {
+  background-color: rgba(83, 100, 255, 0.3);
+  border: 1px solid rgba(83, 100, 255, 0.5);
+  margin-right: 0.2rem;
+}
+
+.message-ai .message-content {
+  background-color: rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  margin-left: 0.2rem;
+}
+
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-left: 5px;
+}
+
+.typing-indicator .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: #4a55a0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
+  background-color: #fff;
+  opacity: 0.7;
+  margin: 0 2px;
+  animation: typingAnimation 1.4s infinite ease-in-out;
+}
+
+.typing-indicator .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+  0%, 100% {
+    transform: scale(0.7);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* 禁用状态的按钮样式 */
+button:disabled {
+  background-color: #a8a8a8;
+  cursor: not-allowed;
+}
+
+input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+/* 新增的链接和代码块样式 */
+:deep(.highlight-link) {
+  color: #4ade80;
+  text-decoration: underline;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+:deep(.highlight-link:hover) {
+  color: #22c55e;
+  text-decoration: none;
+}
+
+:deep(.result-label) {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+:deep(.code-block) {
+  background-color: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+}
+
+:deep(strong) {
+  color: #60a5fa;
+}
+
+/* 添加链接样式 */
+.message-text a {
+  color: #3a86ff; /* 更柔和的蓝色 */
+  text-decoration: underline;
+  word-break: break-all;
+  transition: color 0.2s ease;
+}
+
+.message-text a:hover {
+  color: #00c6ff; /* 鼠标悬停时的亮蓝色 */
+  text-decoration: underline;
+}
+
+/* 更新Step样式 */
+.message-text strong {
+  color: #00c6ff; /* 与主题色调一致的蓝色 */
   font-weight: bold;
-  border: 2px solid #7a85ff;
-  box-shadow: 0 0 10px rgba(122, 133, 255, 0.5);
 }
 
-.avatar-placeholder {
-  font-size: 18px;
+/* 添加代码块和关键词高亮样式 */
+.message-text code {
+  background-color: rgba(30, 30, 50, 0.6);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #70f6ff;
 }
 
-.dropdown-menu {
-  display: none;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background-color: rgba(20, 30, 60, 0.95);
-  border: 1px solid #4a55a0;
-  border-radius: 5px;
-  padding: 10px;
-  min-width: 150px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-  z-index: 101;
-  margin-top: 5px;
+/* 添加引用样式 */
+.message-text blockquote {
+  border-left: 3px solid #3a86ff;
+  padding-left: 10px;
+  margin-left: 0;
+  color: #b5beff;
 }
 
-.user-name {
-  padding: 5px 0;
-  color: #f0f0f0;
-  font-weight: bold;
+/* 添加标题样式 */
+.message-text h1, .message-text h2, .message-text h3, .message-text h4 {
+  color: #00c6ff;
+  margin: 0.8em 0 0.4em 0;
 }
 
-.menu-divider {
-  height: 1px;
-  background-color: #4a55a0;
-  margin: 5px 0;
+.message-text h1 {
+  font-size: 1.4em;
 }
 
-.logout-button {
-  width: 100%;
-  padding: 8px;
-  background-color: transparent;
-  border: 1px solid #ff5555;
-  color: #ff5555;
-  border-radius: 4px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
+.message-text h2 {
+  font-size: 1.3em;
 }
 
-.logout-button:hover {
-  background-color: rgba(255, 85, 85, 0.1);
+.message-text h3 {
+  font-size: 1.2em;
 }
 
-.button-ripple {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle, rgba(255, 85, 85, 0.2) 0%, transparent 70%);
-  transform: scale(0);
-  opacity: 0;
-  transition: transform 0.5s, opacity 0.5s;
+.message-text h4 {
+  font-size: 1.1em;
 }
-
-.logout-button:hover .button-ripple {
-  transform: scale(2);
-  opacity: 1;
-}
-
-.auth-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.auth-button {
-  padding: 8px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  position: relative;
-  overflow: hidden;
-}
-
-.login-button {
-  background-color: #4a55a0;
-  color: white;
-  border: none;
-}
-
-.register-button {
-  background-color: transparent;
-  border: 1px solid #4a55a0;
-  color: #7a85ff;
-}
-
-.button-glow {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  width: calc(100% + 20px);
-  height: calc(100% + 20px);
-  background: radial-gradient(circle, rgba(122, 133, 255, 0.4) 0%, transparent 70%);
-  opacity: 0;
-  transition: opacity 0.5s;
-}
-
-.auth-button:hover .button-glow {
-  opacity: 1;
-}
-
-/* 模态框样式 */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: #0a0c1b;
-  border: 1px solid #4a55a0;
-  border-radius: 8px;
-  padding: 20px;
-  position: relative;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 0 30px rgba(83, 100, 255, 0.4);
-}
-
-.close-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: none;
-  border: none;
-  color: #7a85ff;
-  font-size: 24px;
-  cursor: pointer;
-}
-
-.close-button:hover {
-  color: #f0f0f0;
-}
-
-/* 其他现有样式保持不变 */
-</style> 
+</style>

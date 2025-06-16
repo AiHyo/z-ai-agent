@@ -7,6 +7,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.io.File;
 
 /**
  * 在终端执行命令
@@ -14,61 +18,44 @@ import java.nio.charset.StandardCharsets;
  */
 public class TerminalOperationTool {
 
-    @Tool(description = "Execute the command in the terminal")
-    public String executeTerminalCommand(@ToolParam(description = "Commands executed in the terminal") String command) {
-        StringBuilder output = new StringBuilder();
+    @Tool(description = "Execute terminal commands")
+    public String executeTerminalCommand(@ToolParam(description = "Command to execute") String command) {
         try {
-            // 1. windows
-            // ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c", command);
-            // Process process = builder.start();
-            // 2. mac / linux
-            // Process process = Runtime.getRuntime().exec(command);
-            // 根据操作系统类型选择不同的命令执行器
-            ProcessBuilder builder;
-            String osName = System.getProperty("os.name").toLowerCase();
-            String charset;
-            if (osName.contains("win")) {
-                // windows
-                charset = "GBK";
-                builder = new ProcessBuilder("cmd.exe", "/c", command);
+            Process process;
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                // Windows系统
+                process = Runtime.getRuntime().exec(new String[]{"cmd.exe", "/c", command});
             } else {
-                // mac / linux
-                charset = "UTF-8";
-                builder = new ProcessBuilder("/bin/sh", "-c", command);
-            }
-            Process process = builder.start();
-
-            // 读取输出流
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), charset))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    // 如果是Windows系统，尝试将GBK转换为UTF-8
-                    if (osName.contains("win")) {
-                        line = new String(line.getBytes(charset), StandardCharsets.UTF_8);
-                    }
-                    output.append(line).append("\n");
-                }
+                // Linux/Mac系统
+                process = Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", command});
             }
 
-            // 读取错误流
-            try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream(), charset))) {
-                String line;
-                while ((line = errorReader.readLine()) != null) {
-                    // 同样转换错误流的编码
-                    if (osName.contains("win")) {
-                        line = new String(line.getBytes(charset), StandardCharsets.UTF_8);
-                    }
-                    output.append(line).append("\n");
-                }
+            // 使用正确的字符编码读取输出
+            String charset = System.getProperty("os.name").toLowerCase().contains("win") ? "GBK" : "UTF-8";
+
+            // 读取标准输出
+            BufferedReader stdInput = new BufferedReader(new InputStreamReader(process.getInputStream(), charset));
+            // 读取错误输出
+            BufferedReader stdError = new BufferedReader(new InputStreamReader(process.getErrorStream(), charset));
+
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = stdInput.readLine()) != null) {
+                output.append(line).append("\n");
             }
 
+            // 添加错误输出
+            while ((line = stdError.readLine()) != null) {
+                output.append("ERROR: ").append(line).append("\n");
+            }
+
+            // 等待进程完成
             int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                output.append("Command execution failed with exit code: ").append(exitCode);
-            }
-        } catch (IOException | InterruptedException e) {
-            output.append("Error executing command: ").append(e.getMessage());
+            output.append("\n执行完成，退出代码: ").append(exitCode);
+
+            return output.toString();
+        } catch (Exception e) {
+            return "执行命令出错: " + e.getMessage();
         }
-        return output.toString();
     }
 }
