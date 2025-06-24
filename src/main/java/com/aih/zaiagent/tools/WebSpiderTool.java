@@ -79,11 +79,9 @@ public class WebSpiderTool {
             response.append(images.length() > 0 ? images.toString() : "未找到图片").append("\n");
 
             // 添加HTML源代码（截断版本）
-            response.append("## HTML源代码（截断）\n```html\n");
+            response.append("## 省略………………");
             String html = doc.html();
-            response.append(html.length() > 2000 ? html.substring(0, 2000) + "..." : html).append("\n```\n\n");
-
-            response.append("请根据以上信息分析网页内容，提取有用信息。如需更详细的内容，请指定要提取的部分。");
+            response.append(html.length() > 2000 ? html.substring(0, 2000) + "..." : html).append("\n");
 
             return response.toString();
         } catch (IOException e) {

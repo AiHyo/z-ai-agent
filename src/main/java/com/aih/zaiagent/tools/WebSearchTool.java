@@ -44,7 +44,7 @@ public class WebSearchTool {
                     .form("engine", ENGINE)
                     .form("q", query)
                     .form("api_key", apiKey)
-                    .timeout(10000)
+                    .timeout(30000) // 增加到30秒
                     .execute()
                     .body();
 
@@ -55,34 +55,61 @@ public class WebSearchTool {
             // 添加搜索元数据
             if (jsonResponse.containsKey("search_information")) {
                 JSONObject searchInfo = jsonResponse.getJSONObject("search_information");
-                // formattedResults.append("搜索查询: ").append(searchInfo.getStr("query_displayed", query)).append("<br>");
+                // formattedResults.append("搜索查询: ").append(searchInfo.getStr("query_displayed", query)).append("\n");
             }
 
             // 添加有机搜索结果
             if (jsonResponse.containsKey("organic_results")) {
-                formattedResults.append("## 搜索结果<br><br>");
+                formattedResults.append("## 搜索结果\n\n");
                 JSONArray results = jsonResponse.getJSONArray("organic_results");
                 int count = Math.min(results.size(), resultCount);
 
                 for (int i = 0; i < count; i++) {
                     JSONObject result = results.getJSONObject(i);
-                    formattedResults.append(i+1).append(". **").append(result.getStr("title", "无标题")).append("**<br>");
-                    formattedResults.append("   ").append(result.getStr("snippet", "无描述")).append("<br>");
-                    formattedResults.append("   链接: ").append(result.getStr("link", "无链接")).append("<br><br>");
+                    formattedResults.append(i+1).append(". **").append(result.getStr("title", "无标题")).append("**\n");
+                    formattedResults.append("   ").append(result.getStr("snippet", "无描述")).append("\n");
+                    formattedResults.append("   链接: ").append(result.getStr("link", "无链接")).append("\n\n");
+                }
+            }
+
+            // 添加本地结果（如果有机结果为空）
+            if (formattedResults.length() == 0 && jsonResponse.containsKey("local_results") &&
+                !jsonResponse.getJSONArray("local_results").isEmpty()) {
+
+                formattedResults.append("## 本地景点\n\n");
+                JSONArray localResults = jsonResponse.getJSONArray("local_results");
+                int count = Math.min(localResults.size(), resultCount);
+
+                for (int i = 0; i < count; i++) {
+                    JSONObject result = localResults.getJSONObject(i);
+                    formattedResults.append(i+1).append(". **").append(result.getStr("title", "无标题")).append("**\n");
+                    if (result.containsKey("type")) {
+                        formattedResults.append("   类型: ").append(result.getStr("type", "")).append("\n");
+                    }
+                    if (result.containsKey("address")) {
+                        formattedResults.append("   地址: ").append(result.getStr("address", "")).append("\n");
+                    }
+                    if (result.containsKey("phone")) {
+                        formattedResults.append("   电话: ").append(result.getStr("phone", "")).append("\n");
+                    }
+                    if (result.containsKey("website")) {
+                        formattedResults.append("   网站: ").append(result.getStr("website", "")).append("\n");
+                    }
+                    formattedResults.append("\n");
                 }
             }
 
             // 添加相关问题（如果需要）
             if (questionCount > 0 && jsonResponse.containsKey("related_questions") &&
                 !jsonResponse.getJSONArray("related_questions").isEmpty()) {
-                formattedResults.append("## 相关问题<br><br>");
+                formattedResults.append("## 相关问题\n\n");
                 JSONArray relatedQuestions = jsonResponse.getJSONArray("related_questions");
                 int count = Math.min(relatedQuestions.size(), questionCount);
 
                 for (int i = 0; i < count; i++) {
                     JSONObject question = relatedQuestions.getJSONObject(i);
-                    formattedResults.append("Q: ").append(question.getStr("question", "")).append("<br>");
-                    formattedResults.append("A: ").append(question.getStr("answer", "")).append("<br><br>");
+                    formattedResults.append("Q: ").append(question.getStr("question", "")).append("\n");
+                    formattedResults.append("A: ").append(question.getStr("answer", "")).append("\n\n");
                 }
             }
 

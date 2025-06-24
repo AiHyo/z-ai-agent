@@ -4,7 +4,7 @@ import com.aih.zaiagent.common.BaseResponse;
 import com.aih.zaiagent.common.ResultUtils;
 import com.aih.zaiagent.dto.ConversationUpdateRequest;
 import com.aih.zaiagent.entity.Conversation;
-import com.aih.zaiagent.entity.Message;
+import com.aih.zaiagent.entity.MessageDB;
 import com.aih.zaiagent.exception.BusinessException;
 import com.aih.zaiagent.exception.ErrorCode;
 import com.aih.zaiagent.service.ConversationService;
@@ -113,7 +113,7 @@ public class ConversationController {
         }
 
         // 获取消息列表
-        List<Message> messages = conversationService.getConversationMessages(conversationId);
+        List<MessageDB> messages = conversationService.getConversationMessages(conversationId);
 
         Map<String, Object> result = new HashMap<>();
         result.put("conversation", conversation);

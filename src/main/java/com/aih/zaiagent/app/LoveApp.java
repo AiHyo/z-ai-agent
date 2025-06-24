@@ -1,9 +1,12 @@
 package com.aih.zaiagent.app;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.aih.zaiagent.advisor.MyLoggerAdvisor;
 import com.aih.zaiagent.advisor.ReReadingAdvisor;
+import com.aih.zaiagent.chatmemory.DatabaseChatMemory;
 import com.aih.zaiagent.chatmemory.FileBaseChatMemory;
 import com.aih.zaiagent.rag.QueryRewriter;
+import com.aih.zaiagent.service.ConversationService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -11,11 +14,14 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -31,6 +37,9 @@ import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvis
 @Component
 public class LoveApp {
 
+    @Resource
+    private ConversationService conversationService;
+
     private final ChatClient chatClient;
 
     private static final String SYSTEM_PROMPT = "扮演深耕恋爱心理领域的专家。" +
@@ -44,15 +53,17 @@ public class LoveApp {
     /**
      * 构造函数：使用 dashScopeChatModel 创建 ChatClient
      */
+    // public LoveApp(ChatModel dashscopeChatModel) {
+        // 使用自动注入的代理chatMemory
     public LoveApp(ChatModel dashscopeChatModel) {
         // 初始化基于【文件】的对话记忆
-        String fileDir = System.getProperty("user.dir") + "/chat-memory";
-        ChatMemory chatMemory = new FileBaseChatMemory(fileDir);
+        ChatMemory chatMemory = new FileBaseChatMemory(System.getProperty("user.dir") + "/chat-memory");
         // 初始化基于【内存】的对话记忆
         // ChatMemory chatMemory = new InMemoryChatMemory();
         this.chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
+                        // 开启对话记忆
                         new MessageChatMemoryAdvisor(chatMemory),
                         // 自定义的日志拦截器，按需开启
                         new MyLoggerAdvisor(),
@@ -93,6 +104,24 @@ public class LoveApp {
                         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId) // 设置对话记忆的会话ID
                         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)    // 设置对话记忆的检索大小
                 )
+                .stream()
+                .content();
+    }
+
+    /**
+     * 带用户ID参数的流式对话
+     */
+    public Flux<String> doChatByStream(String message, String chatId, Long userId) {
+        // 为每个请求创建专用的ChatMemory
+        DatabaseChatMemory chatMemory = new DatabaseChatMemory(conversationService, userId);
+        return chatClient.prompt()
+                .user(message)
+                .advisors(advisorSpec -> advisorSpec
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)
+                )
+                .tools(toolCallbackProvider)
+                .advisors(new MessageChatMemoryAdvisor(chatMemory))
                 .stream()
                 .content();
     }

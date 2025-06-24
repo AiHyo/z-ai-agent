@@ -1,12 +1,16 @@
 package com.aih.zaiagent.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.aih.zaiagent.agent.MyManus;
 import com.aih.zaiagent.app.LoveApp;
 import com.aih.zaiagent.service.ConversationService;
 import com.aih.zaiagent.service.UserService;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +34,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AiController {
 
     private static final Logger log = LoggerFactory.getLogger(AiController.class);
+
+    @Value("${love-app.chat-memory-size}")
+    private int loveAppChatMemorySize;
+
+    @Value("${manus.chat-memory-size}")
+    private int manusChatMemorySize;
 
     @Resource
     private LoveApp loveApp;
@@ -63,85 +73,68 @@ public class AiController {
     /**
      * SSE 流式调用 LoveApp AI 恋爱大师
      * @param message 用户输入的消息
-     * @param chatId 聊天会话 ID
-     * @param conversationId 会话ID (用于保存消息，可选)
+     * @param conversationId 会话ID (用于聊天记忆和保存消息)
      * @return 返回聊天结果
      */
     // 返回؜ Flux 响应式‌对象，并且添加  SSE 对应的 MediaType
     @GetMapping(value = "/love_app/chat/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> doChatWithLoveAppSse(String message, String chatId,
-                                           @RequestParam(required = false) String conversationId,
-                                           @RequestParam(required = false) String token) {
-        // 获取原始响应流
-        Flux<String> originalFlux = loveApp.doChatByStream(message, chatId);
+    public Flux<String> doChatWithLoveAppSse(String message,
+                                             @RequestParam String conversationId,
+                                             HttpServletRequest request) {
+        StpUtil.checkLogin(); // 校验登陆
 
-        // 如果提供了conversationId，则保存消息
-        if (conversationId != null && !conversationId.isEmpty()) {
-            try {
-                // 尝试获取当前用户
-                Long userId = null;
-                try {
-                    // 首先尝试从当前会话获取用户信息
-                    userId = userService.getCurrentUser().getId();
-                } catch (Exception e) {
-                    // 如果从当前会话获取失败，尝试使用传入的token
-                    if (token != null && !token.isEmpty()) {
-                        // 临时设置token
-                        cn.dev33.satoken.stp.StpUtil.setTokenValue(token);
-                        try {
-                            // 再次尝试获取用户
-                            userId = userService.getCurrentUser().getId();
-                        } catch (Exception ex) {
-                            // 仍然失败，返回原始流，不保存消息
-                            return originalFlux;
-                        }
-                    } else {
-                        // 无token，返回原始流，不保存消息
-                        return originalFlux;
-                    }
-                }
-
-                // 保存用户消息
-                conversationService.saveMessage(conversationId, userId, message, "user");
-
-                // 初始化响应构建器
-                String responseKey = conversationId + "_" + LocalDateTime.now().toString();
-                responseBuilders.put(responseKey, new StringBuilder());
-
-                // 收集完整响应并在结束时保存
-                final Long finalUserId = userId;  // 创建一个final变量用于lambda表达式
-                return originalFlux
-                        .doOnNext(chunk -> {
-                            // 累积响应内容
-                            responseBuilders.get(responseKey).append(chunk);
-                        })
-                        .doOnComplete(() -> {
-                            // 在流结束时获取完整响应并保存
-                            String fullResponse = responseBuilders.get(responseKey).toString();
-
-                            // 保存AI回复
-                            conversationService.saveMessage(
-                                    conversationId,
-                                    finalUserId,
-                                    fullResponse,
-                                    "ai"
-                            );
-
-                            // 更新会话最后消息
-                            conversationService.updateLastMessage(conversationId, fullResponse);
-
-                            // 清理临时存储
-                            responseBuilders.remove(responseKey);
-                        })
-                        .doOnError(e -> responseBuilders.remove(responseKey));
-            } catch (Exception e) {
-                // 出现任何异常，返回原始流，不保存消息
-                return originalFlux;
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                log.info("Cookie: {} = {}", cookie.getName(), cookie.getValue());
             }
         }
-
-        // 如果没有提供conversationId，则直接返回响应流
+        // 获取原始响应流
+        log.info("begin dochat: {}", conversationId);
+        long userId = StpUtil.getLoginIdAsLong();
+        Flux<String> originalFlux = loveApp.doChatByStream(message, conversationId, userId);
+        log.info("end dochat: {}", conversationId);
         return originalFlux;
+        // try {
+        //     // 获取当前用户id
+        //     Long userId = StpUtil.getLoginIdAsLong();
+        //     // 保存用户消息
+        //     conversationService.saveMessage(conversationId, userId, message, "user");
+        //
+        //     // 初始化响应构建器
+        //     String responseKey = conversationId + "_" + LocalDateTime.now().toString();
+        //     responseBuilders.put(responseKey, new StringBuilder());
+        //
+        //     // 收集完整响应并在结束时保存
+        //     final Long finalUserId = userId;  // 创建一个final变量用于lambda表达式
+        //     return originalFlux
+        //             .doOnNext(chunk -> {
+        //                 // 累积响应内容
+        //                 responseBuilders.get(responseKey).append(chunk);
+        //             })
+        //             .doOnComplete(() -> {
+        //                 // 在流结束时获取完整响应并保存
+        //                 String fullResponse = responseBuilders.get(responseKey).toString();
+        //
+        //                 // 保存AI回复
+        //                 conversationService.saveMessage(
+        //                         conversationId,
+        //                         finalUserId,
+        //                         fullResponse,
+        //                         "ai"
+        //                 );
+        //
+        //                 // 更新会话最后消息
+        //                 conversationService.updateLastMessage(conversationId, fullResponse);
+        //
+        //                 // 清理临时存储
+        //                 responseBuilders.remove(responseKey);
+        //             })
+        //             .doOnError(e -> responseBuilders.remove(responseKey));
+        // } catch (Exception e) {
+        //     // 出现任何异常，返回原始流，不保存消息
+        //     return originalFlux;
+        // }
     }
 
     /**
@@ -193,8 +186,11 @@ public class AiController {
      * @return 流式返回聊天结果
      */
     @GetMapping(value = "/manus/chat/sse")
-    public SseEmitter doChatWithManusSse(String message) {
-        MyManus myManus = new MyManus(availableTools, dashscopeChatModel);
+    public SseEmitter doChatWithManusSse(String message, String conversationId) {
+        StpUtil.checkLogin(); // 校验登陆
+        long userId = StpUtil.getLoginIdAsLong();
+        MyManus myManus = new MyManus(availableTools, dashscopeChatModel, conversationService);
+        myManus.initMessageList(conversationId, manusChatMemorySize, userId);
         return myManus.runStream(message);
     }
 }

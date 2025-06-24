@@ -28,7 +28,7 @@ public class PDFGenerationTool {
 
     @Resource
     private TencentCosService tencentCosService;
-    
+
     private static final String COS_DIRECTORY = "pdf";
 
     @Tool(description = "Generate a PDF file with given content", returnDirect = false)
@@ -39,7 +39,7 @@ public class PDFGenerationTool {
             // 创建临时文件
             File tempFile = File.createTempFile("pdf", ".pdf");
             String tempFilePath = tempFile.getAbsolutePath();
-            
+
             // 创建 PdfWriter 和 PdfDocument 对象
             try (PdfWriter writer = new PdfWriter(tempFilePath);
                  PdfDocument pdf = new PdfDocument(writer);
@@ -56,7 +56,7 @@ public class PDFGenerationTool {
                 // 添加段落并关闭文档
                 document.add(paragraph);
             }
-            
+
             // 上传到腾讯云COS
             // 确保文件名以.pdf结尾
             if (!fileName.toLowerCase().endsWith(".pdf")) {
@@ -64,11 +64,11 @@ public class PDFGenerationTool {
             }
             String fileUrl = tencentCosService.uploadFile(fileName, tempFile, COS_DIRECTORY);
             String fileKey = COS_DIRECTORY + "/" + fileName;
-            
+
             // 删除临时文件
             tempFile.delete();
-            
-            return "PDF generated successfully. Access URL: " + fileUrl + ", Key: " + fileKey;
+
+            return "PDF generated successfully. Access URL: " + fileUrl;
         } catch (IOException e) {
             return "Error generating PDF: " + e.getMessage();
         }

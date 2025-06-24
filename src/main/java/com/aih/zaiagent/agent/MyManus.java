@@ -1,6 +1,7 @@
 package com.aih.zaiagent.agent;
 
 import com.aih.zaiagent.advisor.MyLoggerAdvisor;
+import com.aih.zaiagent.service.ConversationService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
@@ -13,8 +14,9 @@ import org.springframework.stereotype.Component;
 public class MyManus extends TooCallAgent{
 
 
-    public MyManus(ToolCallback[] availableTools, ChatModel dashscopeChatModel) {
+    public MyManus(ToolCallback[] availableTools, ChatModel dashscopeChatModel, ConversationService conversationService) {
         super(availableTools);
+        this.setConversationService(conversationService);
         this.setName("MyManus");
         this.setSystemPrompt("""
                 You are AiHyoManus, an all-capable AI assistant, aimed at solving any task presented by the user.

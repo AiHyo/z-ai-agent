@@ -87,7 +87,7 @@ class LoveAppTest {
         // String answer =  loveApp.doChatWithMcp(message, chatId);
 
         // 测试图片搜索 MCP
-        String message = "帮我搜索一些哄另一半开心的图片";
+        String message = "帮我搜索一些苹果的图片";
         String answer =  loveApp.doChatWithMcp(message, chatId);
         assertNotNull(answer);
         log.info("message: {}, answer: {}", message, answer);

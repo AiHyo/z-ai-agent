@@ -1,9 +1,12 @@
 package com.aih.zaiagent.agent;
 
 import com.aih.zaiagent.agent.model.AgentState;
+import com.aih.zaiagent.service.ConversationService;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 
 /**
  * ReAct (Reasoning and Acting) 模式的代理抽象类

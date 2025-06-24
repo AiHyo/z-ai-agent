@@ -75,6 +75,11 @@ public class TooCallAgent extends ReActAgent {
             ChatResponse chatResponse = this.getChatClient().prompt(prompt)
                     .system(this.getSystemPrompt())
                     .tools(availableTools)
+                    // .advisors(advisorSpec -> advisorSpec
+                    //         .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId) // 设置对话记忆的会话ID
+                    //         .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20)    // 设置对话记忆的检索大小
+                    // )
+                    // .advisors(new MessageChatMemoryAdvisor(new DatabaseChatMemory(this.getConversationService(), userId)))
                     .call()
                     .chatResponse();
             // 记录 ai 响应 => 需要调用的工具列表[在act() 方法中需要使用]，若不为空，再act()
@@ -85,7 +90,8 @@ public class TooCallAgent extends ReActAgent {
             // 从assistantMessage中获取 ①输出提示信息result ②工具调用列表toolCallList
             String result = assistantMessage.getText();
             this.setThinkResult(result); // 记录AI思考结果，用于返回
-            log.info("AI 思考过程：{}",  result);
+            log.info("AI 思考过程：{}", getThinkResult());
+            this.getConversationService().saveMessage(this.getChatId(), this.getUserId(), result, "ai"); // 手动存入数据库
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
             String toolCallInfo = toolCallList.stream()
                     .map(toolCall -> String.format("工具：%s, 参数：%s", toolCall.name(), toolCall.arguments()))
@@ -139,6 +145,7 @@ public class TooCallAgent extends ReActAgent {
                 .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
                 .collect(Collectors.joining("\n"));
         log.info(results);
+        this.getConversationService().saveMessage(this.getChatId(), this.getUserId(), results, "ai"); // 手动存入数据库
         return results;
     }
 }

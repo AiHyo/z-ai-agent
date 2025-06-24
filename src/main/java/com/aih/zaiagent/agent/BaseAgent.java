@@ -2,6 +2,8 @@ package com.aih.zaiagent.agent;
 
 import cn.hutool.core.util.StrUtil;
 import com.aih.zaiagent.agent.model.AgentState;
+import com.aih.zaiagent.chatmemory.DatabaseChatMemory;
+import com.aih.zaiagent.service.ConversationService;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -40,8 +42,13 @@ public abstract class BaseAgent {
     // LLM 大语言模型
     private ChatClient chatClient;
 
+    // ChatMemory 需要
+    private String chatId;
+    private Long userId;
+    private ConversationService conversationService;
+
     // Memory 记忆 (需要自主维护会话上下文)
-    private List<Message> messageList = new ArrayList<>();
+    private List<Message> messageList;
 
     // 存储当前思考结果
     private String thinkResult;
@@ -117,11 +124,13 @@ public abstract class BaseAgent {
                 // 1. 校验
                 if (this.state != AgentState.IDLE) {
                     sseEmitter.send("Agent is busy, please try again later.");
+                    conversationService.saveMessage(chatId, userId, "Agent is busy, please try again later.", "ai");
                     sseEmitter.complete(); // 手动标记事件流完成，关闭连接
                     return;
                 }
                 if (StrUtil.isBlank(userPrompt)) {
                     sseEmitter.send("User prompt cannot be empty.");
+                    conversationService.saveMessage(chatId, userId, "User prompt cannot be empty.", "ai");
                     sseEmitter.complete();
                     return;
                 }
@@ -131,6 +140,7 @@ public abstract class BaseAgent {
             // 2. 准备执行
             // 设置状态，并记录消息，创建结果列表
             this.state = AgentState.RUNNING;
+            conversationService.saveMessage(chatId, userId, userPrompt, "user");
             this.messageList.add(new UserMessage(userPrompt));
             // 3. 开始执行
             try {
@@ -144,34 +154,49 @@ public abstract class BaseAgent {
                         log.warn("Reached maximum steps: {}", maxSteps);
                         this.state = AgentState.FINISHED;
                         sseEmitter.send("Reached maximum steps, please try again with a different prompt.");
+                        conversationService.saveMessage(chatId, userId, "Reached maximum steps, please try again with a different prompt.", "ai");
                         break;
                     }
                     // 执行单个步骤，发送结果到客户端[thinkResult + actResult]
                     String[] stepResult = step();
                     sseEmitter.send("Step " + currentStep + ": " );
+                    conversationService.saveMessage(chatId, userId, "Step " + currentStep + ": ", "ai");
                     for (String result : stepResult) {
-                        sseEmitter.send(result);
+                        log.info("sseEmitter.send,{}",result);
+                        sseEmitter.send(result.replace("\n", "<br>") + "<br>");
+                        conversationService.saveMessage(chatId, userId, result, "ai");
                     }
                 }
                 // 结束后，发送完成消息
-                sseEmitter.complete();
+                try {
+                    // 发送一个特殊的结束标记
+                    sseEmitter.send(SseEmitter.event().name("complete").data("[DONE]"));
+                    // 然后完成连接
+                    sseEmitter.complete();
+                } catch (Exception e) {
+                    log.error("发送完成消息时出错", e);
+                    sseEmitter.completeWithError(e);
+                }
             } catch (Exception e) {
                 this.state = AgentState.ERROR;
                 log.error("Error occurred during agent execution: {}", e.getMessage(), e);
                 try {
                     sseEmitter.send("An error occurred during execution: " + e.getMessage());
+                    conversationService.saveMessage(chatId, userId, "An error occurred during execution: " + e.getMessage(), "ai");
                     sseEmitter.complete();
                 } catch (Exception ex) {
                     sseEmitter.completeWithError(ex);
                 }
             } finally {
-                // 4. 清理资源
+                // 4. 合并消息并清理资源
+                conversationService.mergeAiMessageByConversationId(chatId);
                 this.cleanup();
             }
         });
 
         // 设置sseEmitter的超时和完成回调
         sseEmitter.onTimeout(() -> {
+            conversationService.saveMessage(chatId, userId, "SSE emitter timed out", "ai");
             this.state = AgentState.ERROR; // 超时视为错误状态
             this.cleanup();
             log.warn("SSE emitter timed out");
@@ -185,6 +210,13 @@ public abstract class BaseAgent {
             }
             this.cleanup();
             log.info("SSE has completed and resources cleaned up");
+        });
+
+        // 添加错误回调
+        sseEmitter.onError((ex) -> {
+            this.state = AgentState.ERROR;
+            this.cleanup();
+            log.error("SSE emitter encountered an error: {}", ex.getMessage(), ex);
         });
         return sseEmitter;
     }
@@ -201,5 +233,12 @@ public abstract class BaseAgent {
         // 子类可以重写此方法来清理资源
     }
 
+    // 初始化消息列表
+    public void initMessageList(String conversationId, int lastN, Long userId) {
+        this.chatId = conversationId;
+        this.userId = userId;
+        DatabaseChatMemory chatMemory = new DatabaseChatMemory(this.conversationService, userId);
+        this.messageList = chatMemory.get(conversationId, lastN);
+    }
 
 }
