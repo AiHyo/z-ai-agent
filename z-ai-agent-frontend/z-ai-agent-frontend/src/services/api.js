@@ -476,7 +476,7 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
   let abortController = new AbortController()
   let timeoutId = null
   let reconnectAttempt = 0 // 添加重连计数器
-  let maxReconnects = 0 // 设置为0，禁止自动重连
+  let maxReconnects = 3 // 允许最多3次重试
 
   const completeConnection = () => {
     if (!isCompleted) {
@@ -504,118 +504,169 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
     }
   }
 
-  // 使用Fetch API替代EventSource
-  fetch(url, {
-    method: 'GET',
-    headers: {
-      'Accept': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Authorization': token
-    },
-    credentials: 'include',
-    signal: abortController.signal
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`)
-    }
+  // 添加重试连接功能
+  const connectSSE = () => {
+    // 如果已完成，不再尝试连接
+    if (isCompleted) return;
+    
+    // 每次连接前创建新的AbortController
+    abortController = new AbortController();
+    
+    console.log(`尝试SSE连接 (尝试次数: ${reconnectAttempt + 1}/${maxReconnects + 1})`)
 
-    // 获取response的reader
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
+    // 使用Fetch API替代EventSource
+    fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Authorization': token
+      },
+      credentials: 'include',
+      signal: abortController.signal
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+      
+      // 连接成功，重置重试计数
+      reconnectAttempt = 0
+      console.log('SSE连接已成功建立')
 
-    // 递归读取流数据
-    const readStream = () => {
-      reader.read().then(({ done, value }) => {
-        if (done) {
-          console.log('SSE流已结束')
-          // 处理最后可能的不完整行
-          if (partialLine) {
-            const dataMatch = partialLine.match(/data:(.*)/i)
-            if (dataMatch && dataMatch[1]) {
-              const data = dataMatch[1].trim()
-              messageBuffer += data
-              onMessage(data)
+      // 获取response的reader
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      // 递归读取流数据
+      const readStream = () => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            console.log('SSE流已结束')
+            // 处理最后可能的不完整行
+            if (partialLine) {
+              const dataMatch = partialLine.match(/data:(.*)/i)
+              if (dataMatch && dataMatch[1]) {
+                const data = dataMatch[1].trim()
+                console.log('处理最后一条不完整数据:', data)
+                messageBuffer += data
+                onMessage(data)
+              }
+            }
+            completeConnection()
+            return
+          }
+
+          // 更新最后接收时间
+          lastReceiveTime = Date.now()
+          
+          // 重置任何活动的超时检测
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+              if (!isCompleted) {
+                console.log('SSE连接超时，自动关闭')
+                completeConnection()
+              }
+            }, 300000); // 从30秒(30000)修改为5分钟(300000)
+          }
+          
+          const chunk = decoder.decode(value, { stream: true })
+          console.log('收到SSE数据块:', chunk)
+
+          // 检查是否包含特殊的结束标记
+          if (chunk.includes('[DONE]') || chunk.includes('data: [DONE]')) {
+            console.log('检测到[DONE]标记，结束连接')
+            completeConnection()
+            return
+          }
+
+          // 将新块与之前的不完整行合并
+          const fullText = partialLine + chunk
+
+          // 处理方法1: 简单处理所有内容 - 如果上面的方法不工作，可以尝试这种方式
+          if (fullText.trim()) {
+            // 简单尝试提取所有data:开头的行
+            const lines = fullText.split('\n');
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (trimmedLine.startsWith('data:')) {
+                const data = trimmedLine.substring(5).trim();
+                if (data && data !== '[DONE]') {
+                  console.log('直接处理数据行:', data);
+                  onMessage(data);
+                } else if (data === '[DONE]') {
+                  console.log('检测到[DONE]标记，结束连接');
+                  completeConnection();
+                  return;
+                }
+              }
+            }
+            // 保存最后一行可能不完整的内容
+            partialLine = lines[lines.length - 1];
+            if (partialLine.trim().startsWith('data:')) {
+              // 已经处理过了，清空
+              partialLine = '';
             }
           }
-          completeConnection()
-          return
-        }
 
-        lastReceiveTime = Date.now()
-        const chunk = decoder.decode(value, { stream: true })
-
-        // 检查是否包含特殊的结束标记
-        if (chunk.includes('[DONE]') || chunk.includes('data: [DONE]')) {
-          console.log('检测到[DONE]标记，结束连接')
-          completeConnection()
-          return
-        }
-
-        // 将新块与之前的不完整行合并
-        const fullText = partialLine + chunk
-
-        // 按SSE格式分割消息（空行分隔）
-        const events = fullText.split('\n\n')
-
-        // 保存最后一个可能不完整的部分
-        partialLine = events.pop() || ''
-
-        // 处理完整的事件
-        for (const event of events) {
-          // 检查是否是注释（心跳消息）
-          if (event.startsWith(':')) {
-            console.log('收到心跳消息:', event)
-            continue
+          // 如果未完成，继续读取
+          if (!isCompleted) {
+            readStream()
           }
-
-          // 提取data字段值
-          const dataMatch = event.match(/data:(.*)/i)
-          if (dataMatch && dataMatch[1]) {
-            const data = dataMatch[1].trim()
-            // 检查是否是结束标记
-            if (data === '[DONE]') {
-              console.log('检测到[DONE]标记，结束连接')
+        }).catch(error => {
+          // 只处理非中止错误
+          if (error.name !== 'AbortError' && !isCompleted) {
+            console.error('SSE读取错误:', error)
+            
+            // 尝试重连，除非已达到最大重试次数
+            if (reconnectAttempt < maxReconnects) {
+              reconnectAttempt++;
+              console.log(`SSE连接中断，${reconnectAttempt}秒后尝试重连...`);
+              setTimeout(() => {
+                if (!isCompleted) connectSSE();
+              }, reconnectAttempt * 1000);
+            } else {
+              onError(error)
               completeConnection()
-              return
             }
-            messageBuffer += data
-            onMessage(data)
           }
-        }
+        })
+      }
 
-        // 如果未完成，继续读取
-        if (!isCompleted) {
-          readStream()
-        }
-      }).catch(error => {
-        // 只处理非中止错误
-        if (error.name !== 'AbortError' && !isCompleted) {
-          console.error('SSE读取错误:', error)
+      // 开始读取
+      readStream()
+    })
+    .catch(error => {
+      if (!isCompleted && error.name !== 'AbortError') {
+        console.error('SSE连接错误:', error)
+        
+        // 尝试重连，除非已达到最大重试次数
+        if (reconnectAttempt < maxReconnects) {
+          reconnectAttempt++;
+          console.log(`SSE连接失败，${reconnectAttempt}秒后尝试重连...`);
+          setTimeout(() => {
+            if (!isCompleted) connectSSE();
+          }, reconnectAttempt * 1000);
+        } else {
           onError(error)
           completeConnection()
         }
-      })
-    }
+      }
+    })
+  }
 
-    // 开始读取
-    readStream()
-  })
-  .catch(error => {
-    if (!isCompleted && error.name !== 'AbortError') {
-      console.error('SSE连接错误:', error)
-      onError(error)
-      completeConnection()
-    }
-  })
-
-  // 添加超时检测，如果长时间没有数据，自动关闭连接
+  // 初始化超时检测，如果长时间没有数据，自动关闭连接
   timeoutId = setTimeout(() => {
     if (!isCompleted) {
       console.log('SSE连接超时，自动关闭')
       completeConnection()
     }
   }, 30000) // 30秒超时
+
+  // 启动SSE连接
+  connectSSE();
 
   // 返回一个可以关闭连接的对象
   return {

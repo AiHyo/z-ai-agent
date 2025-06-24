@@ -632,22 +632,6 @@ export default {
             timeoutCheck = null;
           }
           chatConnection = null;
-
-          // 保存消息到服务器
-          try {
-            conversationApi.saveMessage(
-              currentConversationId.value,
-              userMessage,
-              messages.value[aiResponseIndex].content,
-              'manus'
-            ).then(() => {
-              console.log('消息已保存到服务器');
-            }).catch(err => {
-              console.error('保存消息失败:', err);
-            });
-          } catch (e) {
-            console.error('保存消息时出错:', e);
-          }
         }
       );
 
@@ -683,7 +667,7 @@ export default {
               }
 
               // 如果连续多次检查内容没变化，则认为流已结束
-              if (noChangeCounter >= (isThinking ? 60 : 20)) {
+              if (noChangeCounter >= (isThinking ? 300 : 60)) { // 思考状态从60秒增加到300秒(5分钟)，普通状态从20秒增加到60秒
                 clearInterval(timeoutCheck);
                 timeoutCheck = null;
                 messages.value[aiResponseIndex].isTyping = false;
@@ -691,22 +675,6 @@ export default {
                 if (chatConnection) {
                   chatConnection.close();
                   chatConnection = null;
-
-                  // 保存消息到服务器
-                  try {
-                    conversationApi.saveMessage(
-                      currentConversationId.value,
-                      userMessage,
-                      messages.value[aiResponseIndex].content,
-                      'manus'
-                    ).then(() => {
-                      console.log('消息已保存到服务器(超时保存)');
-                    }).catch(err => {
-                      console.error('保存消息失败:', err);
-                    });
-                  } catch (e) {
-                    console.error('保存消息时出错:', e);
-                  }
                 }
               }
             } else {
