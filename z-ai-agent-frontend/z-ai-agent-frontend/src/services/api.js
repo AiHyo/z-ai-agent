@@ -1,6 +1,48 @@
 import axios from 'axios'
 
-const API_URL = 'http://localhost:8123/api'
+// 使用相对路径，避免跨域问题
+const API_URL = '/api'
+
+// 创建一个带有拦截器的 axios 实例
+const apiClient = axios.create({
+  baseURL: API_URL,
+  withCredentials: true, // 确保跨域请求发送cookies
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 请求拦截器
+apiClient.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('Authorization')
+    if (token) {
+      // 直接使用token，不添加Bearer前缀
+      config.headers['Authorization'] = token
+    }
+    return config
+  },
+  error => {
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器
+apiClient.interceptors.response.use(
+  response => {
+    return response
+  },
+  error => {
+    // 处理401未授权错误
+    if (error.response && error.response.status === 401) {
+      // 清除token并重定向到登录页
+      localStorage.removeItem('Authorization')
+      // 可以在这里添加重定向逻辑
+    }
+    return Promise.reject(error)
+  }
+)
 
 // 创建一个随机的聊天ID
 export const generateChatId = () => {
@@ -12,21 +54,35 @@ const authApi = {
   // 用户登录
   login: async (username, password) => {
     try {
-      const response = await axios.post(`${API_URL}/user/login`, {
+      const response = await apiClient.post('/user/login', {
         username,
         password
       })
+
+      // 检查响应结构
+      if (response.data && response.data.code === 0) {
+        const authToken = response.data.data?.Authorization
+
+        if (authToken) {
+          // 保存token到localStorage
+          localStorage.setItem('Authorization', authToken)
+
+          // 设置axios默认headers，用于后续请求
+          axios.defaults.headers.common['Authorization'] = authToken
+        }
+      }
+
       return response.data
     } catch (error) {
       console.error('登录请求失败:', error)
-      throw error.response?.data || error
+      throw error
     }
   },
 
-  // 用户注册
+  // 用户注册 - 使用apiClient
   register: async (username, password) => {
     try {
-      const response = await axios.post(`${API_URL}/user/register`, {
+      const response = await apiClient.post('/user/register', {
         username,
         password
       })
@@ -37,33 +93,36 @@ const authApi = {
     }
   },
 
-  // 获取用户信息
-  getUserInfo: async (token) => {
+  // 检查登录状态
+  isLogin: async () => {
     try {
-      const response = await axios.get(`${API_URL}/user/info`, {
-        headers: {
-          Authorization: token
-        }
-      })
+      const response = await apiClient.get('/user/isLogin')
       return response.data
     } catch (error) {
-      console.error('获取用户信息失败:', error)
-      throw error.response?.data || error
+      console.error('检查登录状态失败:', error)
+      throw error
     }
   },
 
-  // 用户登出
-  logout: async (token) => {
+  // 获取用户信息
+  getUserInfo: async () => {
     try {
-      const response = await axios.post(`${API_URL}/user/logout`, null, {
-        headers: {
-          Authorization: token
-        }
-      })
+      const response = await apiClient.get('/user/info')
       return response.data
     } catch (error) {
-      console.error('登出请求失败:', error)
-      throw error.response?.data || error
+      console.error('获取用户信息失败:', error)
+      throw error
+    }
+  },
+
+  // 登出
+  logout: async () => {
+    try {
+      const response = await apiClient.post('/user/logout')
+      return response.data
+    } catch (error) {
+      console.error('登出失败:', error)
+      throw error
     }
   }
 }
@@ -73,7 +132,7 @@ const conversationApi = {
   // 创建新会话
   createConversation: async (aiType, firstMessage = null, groupId = null) => {
     try {
-      let url = `${API_URL}/conversation/create?aiType=${encodeURIComponent(aiType)}`
+      let url = `/conversation/create?aiType=${encodeURIComponent(aiType)}`
 
       if (firstMessage) {
         url += `&firstMessage=${encodeURIComponent(firstMessage)}`
@@ -83,11 +142,8 @@ const conversationApi = {
         url += `&groupId=${groupId}`
       }
 
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.post(url, null, { headers })
+      // 使用apiClient而不是axios，确保带上token
+      const response = await apiClient.post(url)
       return response.data
     } catch (error) {
       console.error('创建会话失败:', error)
@@ -98,7 +154,7 @@ const conversationApi = {
   // 获取用户的会话列表
   getConversations: async (page = 1, size = 10, groupId = null, aiType = null) => {
     try {
-      let url = `${API_URL}/conversation/list?page=${page}&size=${size}`
+      let url = `/conversation/list?page=${page}&size=${size}`
 
       if (groupId !== null) {
         url += `&groupId=${groupId}`
@@ -108,11 +164,8 @@ const conversationApi = {
         url += `&aiType=${encodeURIComponent(aiType)}`
       }
 
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.get(url, { headers })
+      // 使用apiClient而不是axios，确保带上token
+      const response = await apiClient.get(url)
       return response.data
     } catch (error) {
       console.error('获取会话列表失败:', error)
@@ -123,11 +176,11 @@ const conversationApi = {
   // 获取会话消息历史
   getConversationMessages: async (conversationId) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
+      if (!conversationId) {
+        throw new Error('无效的会话ID')
+      }
 
-      const response = await axios.get(`${API_URL}/conversation/${conversationId}/messages`, { headers })
+      const response = await apiClient.get(`/conversation/${conversationId}/messages`)
       return response.data
     } catch (error) {
       console.error('获取会话消息历史失败:', error)
@@ -138,15 +191,11 @@ const conversationApi = {
   // 更新会话信息（标题和分组）
   updateConversation: async (conversationId, title, groupId = null) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.post(`${API_URL}/conversation/update`, {
+      const response = await apiClient.post(`/conversation/update`, {
         id: conversationId,
         title,
         groupId
-      }, { headers })
+      })
       return response.data
     } catch (error) {
       console.error('更新会话信息失败:', error)
@@ -157,11 +206,7 @@ const conversationApi = {
   // 删除会话
   deleteConversation: async (conversationId) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.delete(`${API_URL}/conversation/${conversationId}`, { headers })
+      const response = await apiClient.delete(`/conversation/${conversationId}`)
       return response.data
     } catch (error) {
       console.error('删除会话失败:', error)
@@ -172,16 +217,12 @@ const conversationApi = {
   // 保存会话消息
   saveMessage: async (conversationId, userMessage, aiResponse, aiType) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.post(`${API_URL}/message/save`, {
+      const response = await apiClient.post(`/message/save`, {
         conversationId,
         userMessage,
         aiResponse,
         aiType
-      }, { headers })
+      })
       return response.data
     } catch (error) {
       console.error('保存会话消息失败:', error)
@@ -195,14 +236,10 @@ const conversationGroupApi = {
   // 创建会话分组
   createGroup: async (name, aiType = null) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.post(`${API_URL}/conversation/group/create`, {
+      const response = await apiClient.post(`/conversation/group/create`, {
         name,
         aiType
-      }, { headers })
+      })
       return response.data
     } catch (error) {
       console.error('创建会话分组失败:', error)
@@ -213,18 +250,14 @@ const conversationGroupApi = {
   // 获取用户的所有会话分组
   getGroups: async (aiType = null) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      let url = `${API_URL}/conversation/group/list`;
+      let url = `/conversation/group/list`;
 
       // 如果指定了aiType，添加到请求参数
       if (aiType !== null) {
         url += `?aiType=${encodeURIComponent(aiType)}`;
       }
 
-      const response = await axios.get(url, { headers })
+      const response = await apiClient.get(url)
       return response.data
     } catch (error) {
       console.error('获取会话分组列表失败:', error)
@@ -235,14 +268,10 @@ const conversationGroupApi = {
   // 更新会话分组
   updateGroup: async (groupId, name) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.post(`${API_URL}/conversation/group/update`, {
+      const response = await apiClient.post(`/conversation/group/update`, {
         id: groupId,
         name
-      }, { headers })
+      })
       return response.data
     } catch (error) {
       console.error('更新会话分组失败:', error)
@@ -253,11 +282,7 @@ const conversationGroupApi = {
   // 删除会话分组
   deleteGroup: async (groupId) => {
     try {
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('Authorization')
-      const headers = token ? { Authorization: token } : {}
-
-      const response = await axios.delete(`${API_URL}/conversation/group/${groupId}`, { headers })
+      const response = await apiClient.delete(`/conversation/group/${groupId}`)
       return response.data
     } catch (error) {
       console.error('删除会话分组失败:', error)
@@ -266,199 +291,344 @@ const conversationGroupApi = {
   }
 }
 
-// 爱情应用聊天接口 - SSE方式
-export const chatWithLoveApp = (message, chatId, onMessage, onError, onComplete, conversationId = null) => {
-  let url = `${API_URL}/ai/love_app/chat/sse?message=${encodeURIComponent(message)}&chatId=${encodeURIComponent(chatId)}`
-
-  // 如果有会话ID，添加到请求参数
-  if (conversationId) {
-    url += `&conversationId=${encodeURIComponent(conversationId)}`
+// 爱情应用聊天接口 - SSE方式使用Fetch API实现
+export const chatWithLoveApp = (message, conversationId, onMessage, onError, onComplete) => {
+  // 检查conversationId是否有效
+  if (!conversationId) {
+    console.error('无效的会话ID:', conversationId)
+    if (onError) onError(new Error('无效的会话ID'))
+    if (onComplete) onComplete()
+    return { close: () => {} }
   }
 
-  // 获取token并添加到请求参数，因为SSE不能在header中传递token
+  // 构建URL
+  let url = `${API_URL}/ai/love_app/chat/sse?message=${encodeURIComponent(message)}&conversationId=${encodeURIComponent(conversationId)}`
+
+  console.log('连接SSE URL:', url)
+
+  // 获取token
   const token = localStorage.getItem('Authorization')
-  if (token) {
-    url += `&token=${encodeURIComponent(token)}`
-  }
 
-  const eventSource = new EventSource(url)
+  // 控制变量
   let isCompleted = false
   let messageBuffer = ''
+  let partialLine = '' // 用于处理不完整的行
   let lastReceiveTime = Date.now()
+  let abortController = new AbortController()
+  let timeoutId = null
 
   const completeConnection = () => {
     if (!isCompleted) {
       isCompleted = true
-      if (onComplete) onComplete()
+
+      // 清除所有超时计时器
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      // 立即中止fetch请求，确保连接关闭
       try {
-        eventSource.close()
-      } catch(e) {
-        console.log('关闭EventSource时出错', e)
+        abortController.abort()
+      } catch (e) {
+        console.error('中止连接时出错:', e)
       }
+
+      // 延迟调用onComplete，确保资源已清理
+      setTimeout(() => {
+        if (onComplete) onComplete()
+      }, 50)
     }
   }
 
-  eventSource.onmessage = (event) => {
-    lastReceiveTime = Date.now()
-    messageBuffer += event.data
-    onMessage(event.data)
-
-    // 如果消息停顿超过2秒，可能是完成了
-    setTimeout(() => {
-      const currentTime = Date.now()
-      if (currentTime - lastReceiveTime > 2000 && !isCompleted) {
-        completeConnection()
-      }
-    }, 2200)
-  }
-
-  eventSource.onerror = (error) => {
-    // 如果已经标记为完成，则忽略错误
-    if (isCompleted) {
-      return
+  // 使用Fetch API替代EventSource
+  fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Authorization': token
+    },
+    credentials: 'include',
+    signal: abortController.signal
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`)
     }
 
-    // 如果消息缓冲区不为空，可能是正常完成
-    if (messageBuffer.trim().length > 0) {
-      // 只有在消息结尾不是标点符号时才可能是真错误
-      const lastChar = messageBuffer.trim().slice(-1)
-      if (/[。！？!?.,;:，；：]/.test(lastChar)) {
-        // 很可能是正常结束
-        completeConnection()
-        return
-      }
+    // 获取response的reader
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
 
-      // 如果最后接收时间在1秒内，可能是正常完成
-      if (Date.now() - lastReceiveTime < 1000) {
-        completeConnection()
-        return
-      }
+    // 递归读取流数据
+    const readStream = () => {
+      reader.read().then(({ done, value }) => {
+        if (done) {
+          console.log('SSE流已结束')
+          // 处理最后可能的不完整行
+          if (partialLine) {
+            const dataMatch = partialLine.match(/data:(.*)/i)
+            if (dataMatch && dataMatch[1]) {
+              const data = dataMatch[1].trim()
+              messageBuffer += data
+              onMessage(data)
+            }
+          }
+          completeConnection()
+          return
+        }
+
+        lastReceiveTime = Date.now()
+        const chunk = decoder.decode(value, { stream: true })
+
+        // 将新块与之前的不完整行合并
+        const fullText = partialLine + chunk
+
+        // 按SSE格式分割消息（空行分隔）
+        const events = fullText.split('\n\n')
+
+        // 保存最后一个可能不完整的部分
+        partialLine = events.pop() || ''
+
+        // 处理完整的事件
+        for (const event of events) {
+          // 检查是否是注释（心跳消息）
+          if (event.startsWith(':')) {
+            console.log('收到心跳消息:', event)
+            continue
+          }
+
+          // 提取data字段值
+          const dataMatch = event.match(/data:(.*)/i)
+          if (dataMatch && dataMatch[1]) {
+            const data = dataMatch[1].trim()
+            messageBuffer += data
+            onMessage(data)
+          }
+        }
+
+        // 如果未完成，继续读取
+        if (!isCompleted) {
+          readStream()
+        }
+      }).catch(error => {
+        // 只处理非中止错误
+        if (error.name !== 'AbortError' && !isCompleted) {
+          console.error('SSE读取错误:', error)
+          onError(error)
+          completeConnection()
+        }
+      })
     }
 
-    // 真正的错误情况
-    try {
-      eventSource.close()
-    } catch(e) {}
+    // 开始读取
+    readStream()
+  })
+  .catch(error => {
+    if (!isCompleted && error.name !== 'AbortError') {
+      console.error('SSE连接错误:', error)
+      onError(error)
+      completeConnection()
+    }
+  })
 
-    onError(error)
-  }
+  // 添加超时检测，如果长时间没有数据，自动关闭连接
+  timeoutId = setTimeout(() => {
+    if (!isCompleted) {
+      console.log('SSE连接超时，自动关闭')
+      completeConnection()
+    }
+  }, 30000) // 30秒超时
 
+  // 返回一个可以关闭连接的对象
   return {
     close: () => {
+      console.log('手动关闭SSE连接')
       completeConnection()
     }
   }
 }
 
-// Manus应用聊天接口 - SSE方式
-export const chatWithManus = (message, onMessage, onError, onComplete) => {
-  let url = `${API_URL}/ai/manus/chat/sse?message=${encodeURIComponent(message)}`
-
-  // 获取token并添加到请求参数
-  const token = localStorage.getItem('Authorization')
-  if (token) {
-    url += `&token=${encodeURIComponent(token)}`
+// 使用服务器发送事件(SSE)流式获取Manus AI回复
+export const chatWithManus = (message, conversationId, onMessage, onError, onComplete) => {
+  // 检查conversationId是否有效
+  if (!conversationId) {
+    console.error('无效的会话ID:', conversationId)
+    if (onError) onError(new Error('无效的会话ID'))
+    if (onComplete) onComplete()
+    return { close: () => {} }
   }
 
-  console.log("连接Manus SSE URL:", url);
+  // 构建URL
+  let url = `${API_URL}/ai/manus/chat/sse?message=${encodeURIComponent(message)}&conversationId=${encodeURIComponent(conversationId)}`
 
-  const eventSource = new EventSource(url);
-  let isCompleted = false;
-  let messageBuffer = '';
-  let lastReceiveTime = Date.now();
+  console.log('连接Manus SSE URL:', url)
+
+  // 获取token
+  const token = localStorage.getItem('Authorization')
+
+  // 控制变量
+  let isCompleted = false
+  let messageBuffer = ''
+  let partialLine = '' // 用于处理不完整的行
+  let lastReceiveTime = Date.now()
+  let abortController = new AbortController()
+  let timeoutId = null
+  let reconnectAttempt = 0 // 添加重连计数器
+  let maxReconnects = 0 // 设置为0，禁止自动重连
 
   const completeConnection = () => {
     if (!isCompleted) {
-      isCompleted = true;
-      if (onComplete) onComplete();
+      isCompleted = true
+
+      // 清除所有超时计时器
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      // 立即中止fetch请求，确保连接关闭
       try {
-        eventSource.close();
-      } catch(e) {
-        console.log('关闭EventSource时出错', e);
-      }
-    }
-  };
-
-  // 处理心跳消息
-  eventSource.addEventListener('comment', (event) => {
-    console.log('收到心跳消息:', event);
-    lastReceiveTime = Date.now(); // 更新最后接收时间
-  });
-
-  eventSource.onmessage = (event) => {
-    lastReceiveTime = Date.now();
-    messageBuffer += event.data;
-    onMessage(event.data);
-
-    // 强制浏览器重绘
-    requestAnimationFrame(() => {
-      // 这个空函数会强制浏览器在下一帧重绘
-    });
-
-    // 如果消息停顿超过3分钟，可能是完成了（延长等待时间，适应AI思考时间）
-    setTimeout(() => {
-      const currentTime = Date.now();
-      if (currentTime - lastReceiveTime > 180000 && !isCompleted) {
-        console.log('长时间未收到消息，关闭连接');
-        completeConnection();
-      }
-    }, 181000); // 3分钟+1秒
-  };
-
-  eventSource.onerror = (error) => {
-    console.log('SSE连接错误:', error);
-    // 如果已经标记为完成，则忽略错误
-    if (isCompleted) {
-      return;
-    }
-
-    // 如果消息缓冲区不为空，可能是正常完成
-    if (messageBuffer.trim().length > 0) {
-      // 只有在消息结尾不是标点符号时才可能是真错误
-      const lastChar = messageBuffer.trim().slice(-1);
-      if (/[。！？!?.,;:，；：]/.test(lastChar)) {
-        // 很可能是正常结束
-        completeConnection();
-        return;
+        abortController.abort()
+      } catch (e) {
+        console.error('中止连接时出错:', e)
       }
 
-      // 如果最后接收时间在5秒内，可能是正常完成
-      if (Date.now() - lastReceiveTime < 5000) {
-        completeConnection();
-        return;
-      }
+      // 延迟调用onComplete，确保资源已清理
+      setTimeout(() => {
+        if (onComplete) onComplete()
+      }, 50)
+
+      console.log('SSE连接已完全关闭')
+    }
+  }
+
+  // 使用Fetch API替代EventSource
+  fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Authorization': token
+    },
+    credentials: 'include',
+    signal: abortController.signal
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`)
     }
 
-    // 如果是首次尝试（无数据）或者确实是错误，尝试自动重连
-    // 注意：EventSource本身会尝试自动重连，这里只处理真正的错误情况
-    if (messageBuffer.trim().length === 0 && Date.now() - lastReceiveTime > 10000) {
-      // 真正的错误情况
-      try {
-        eventSource.close();
-      } catch(e) {}
+    // 获取response的reader
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
 
-      onError(error);
+    // 递归读取流数据
+    const readStream = () => {
+      reader.read().then(({ done, value }) => {
+        if (done) {
+          console.log('SSE流已结束')
+          // 处理最后可能的不完整行
+          if (partialLine) {
+            const dataMatch = partialLine.match(/data:(.*)/i)
+            if (dataMatch && dataMatch[1]) {
+              const data = dataMatch[1].trim()
+              messageBuffer += data
+              onMessage(data)
+            }
+          }
+          completeConnection()
+          return
+        }
+
+        lastReceiveTime = Date.now()
+        const chunk = decoder.decode(value, { stream: true })
+
+        // 检查是否包含特殊的结束标记
+        if (chunk.includes('[DONE]') || chunk.includes('data: [DONE]')) {
+          console.log('检测到[DONE]标记，结束连接')
+          completeConnection()
+          return
+        }
+
+        // 将新块与之前的不完整行合并
+        const fullText = partialLine + chunk
+
+        // 按SSE格式分割消息（空行分隔）
+        const events = fullText.split('\n\n')
+
+        // 保存最后一个可能不完整的部分
+        partialLine = events.pop() || ''
+
+        // 处理完整的事件
+        for (const event of events) {
+          // 检查是否是注释（心跳消息）
+          if (event.startsWith(':')) {
+            console.log('收到心跳消息:', event)
+            continue
+          }
+
+          // 提取data字段值
+          const dataMatch = event.match(/data:(.*)/i)
+          if (dataMatch && dataMatch[1]) {
+            const data = dataMatch[1].trim()
+            // 检查是否是结束标记
+            if (data === '[DONE]') {
+              console.log('检测到[DONE]标记，结束连接')
+              completeConnection()
+              return
+            }
+            messageBuffer += data
+            onMessage(data)
+          }
+        }
+
+        // 如果未完成，继续读取
+        if (!isCompleted) {
+          readStream()
+        }
+      }).catch(error => {
+        // 只处理非中止错误
+        if (error.name !== 'AbortError' && !isCompleted) {
+          console.error('SSE读取错误:', error)
+          onError(error)
+          completeConnection()
+        }
+      })
     }
-  };
 
-  // 监听打开事件
-  eventSource.onopen = (event) => {
-    console.log('SSE连接已打开:', event);
-    lastReceiveTime = Date.now(); // 更新最后接收时间
-  };
+    // 开始读取
+    readStream()
+  })
+  .catch(error => {
+    if (!isCompleted && error.name !== 'AbortError') {
+      console.error('SSE连接错误:', error)
+      onError(error)
+      completeConnection()
+    }
+  })
 
+  // 添加超时检测，如果长时间没有数据，自动关闭连接
+  timeoutId = setTimeout(() => {
+    if (!isCompleted) {
+      console.log('SSE连接超时，自动关闭')
+      completeConnection()
+    }
+  }, 30000) // 30秒超时
+
+  // 返回一个可以关闭连接的对象
   return {
     close: () => {
-      completeConnection();
+      console.log('手动关闭SSE连接')
+      completeConnection()
     }
-  };
-};
+  }
+}
 
 // 将所有导出移到文件末尾
 // 默认导出
 export default {
-  chatWithLoveApp,
-  chatWithManus,
   generateChatId,
   authApi,
   conversationApi,
@@ -466,4 +636,7 @@ export default {
 }
 
 // 命名导出
-export { conversationApi, conversationGroupApi, authApi }
+export { conversationApi, conversationGroupApi, authApi, apiClient }
+
+// 导出API_URL常量，以便其他组件使用
+export { API_URL }

@@ -16,7 +16,7 @@
           </button>
         </div>
       </div>
-      
+
       <!-- 未登录状态 - 分离登录和注册按钮 -->
       <div v-else class="auth-buttons">
         <button @click="showLoginForm" class="auth-button login-button">
@@ -29,15 +29,15 @@
         </button>
       </div>
     </div>
-    
+
     <!-- 登录/注册弹窗 -->
     <teleport to="body">
       <div v-if="showAuthModal" class="modal-backdrop" @click="closeModal">
         <div class="modal-content" @click.stop>
           <button class="close-button" @click="closeModal">×</button>
-          <AuthComponent 
-            :initial-tab="activeAuthTab" 
-            @login-success="handleLoginSuccess" 
+          <AuthComponent
+            :initial-tab="activeAuthTab"
+            @login-success="handleLoginSuccess"
           />
         </div>
       </div>
@@ -60,34 +60,42 @@ export default {
     const activeAuthTab = ref('login')
     const isLoggedIn = ref(false)
     const username = ref('')
-    
+
     // 获取用户名首字母作为头像
     const usernameInitial = computed(() => {
       return username.value ? username.value.charAt(0).toUpperCase() : '?'
     })
-    
+
     // 显示登录表单
     const showLoginForm = () => {
       activeAuthTab.value = 'login'
       showAuthModal.value = true
     }
-    
+
     // 显示注册表单
     const showRegisterForm = () => {
       activeAuthTab.value = 'register'
       showAuthModal.value = true
     }
-    
+
     // 检查登录状态
     const checkLoginStatus = async () => {
       const token = localStorage.getItem('Authorization')
       if (token) {
         try {
-          // 调用接口校验token
-          const response = await authApi.getUserInfo(token)
-          if (response.code === 0 && response.data) {
-            isLoggedIn.value = true
-            username.value = response.data.username
+          // 使用 isLogin 接口检查登录状态
+          const response = await authApi.isLogin()
+          if (response.code === 0 && response.data === true) {
+            // 获取用户信息
+            const userInfoResponse = await authApi.getUserInfo()
+            if (userInfoResponse.code === 0 && userInfoResponse.data) {
+              isLoggedIn.value = true
+              username.value = userInfoResponse.data.username
+            } else {
+              // token无效
+              localStorage.removeItem('Authorization')
+              isLoggedIn.value = false
+            }
           } else {
             // token无效
             localStorage.removeItem('Authorization')
@@ -100,14 +108,14 @@ export default {
         }
       }
     }
-    
+
     // 登录成功处理
     const handleLoginSuccess = (userData) => {
       isLoggedIn.value = true
       username.value = userData.username
       closeModal()
     }
-    
+
     // 登出处理
     const handleLogout = async () => {
       const token = localStorage.getItem('Authorization')
@@ -127,17 +135,17 @@ export default {
         username.value = ''
       }
     }
-    
+
     // 关闭登录弹窗
     const closeModal = () => {
       showAuthModal.value = false
     }
-    
+
     // 组件挂载时检查登录状态
     onMounted(() => {
       checkLoginStatus()
     })
-    
+
     return {
       isLoggedIn,
       username,
@@ -415,15 +423,15 @@ export default {
     top: 0.5rem;
     right: 1rem;
   }
-  
+
   .auth-buttons {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .auth-button {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
   }
 }
-</style> 
+</style>

@@ -1,9 +1,9 @@
-<template>
+，而<template>
   <div :class="containerClasses">
     <div class="cyber-grid"></div>
-    
+
     <!-- 会话侧边栏 -->
-    <ConversationSidebar 
+    <ConversationSidebar
       v-if="isLoggedIn"
       aiType="love-app"
       :initialConversationId="currentConversationId"
@@ -12,7 +12,7 @@
       @conversation-created="handleConversationCreated"
       @sidebar-toggle="updateSidebarState"
     />
-    
+
     <!-- 未登录提示 -->
     <div v-if="!isLoggedIn && showLoginNotice" class="login-notice">
       <div class="notice-content">
@@ -25,7 +25,7 @@
         <button @click="dismissLoginNotice" class="dismiss-btn">稍后再说</button>
       </div>
     </div>
-    
+
     <!-- 添加页面右上角的用户登录状态和头像 -->
     <div class="header-nav">
       <!-- 右侧用户信息/登录按钮 -->
@@ -44,7 +44,7 @@
             </button>
           </div>
         </div>
-        
+
         <!-- 未登录状态 -->
         <div v-else class="auth-buttons">
           <button @click="showLoginForm" class="auth-button login-button">
@@ -58,29 +58,29 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 登录/注册弹窗 -->
     <teleport to="body">
       <div v-if="showAuthModal" class="modal-backdrop" @click="closeModal">
         <div class="modal-content" @click.stop>
           <button class="close-button" @click="closeModal">×</button>
-          <AuthComponent 
-            :initial-tab="activeAuthTab" 
-            @login-success="handleLoginSuccess" 
+          <AuthComponent
+            :initial-tab="activeAuthTab"
+            @login-success="handleLoginSuccess"
           />
         </div>
       </div>
     </teleport>
-    
+
     <div class="chat-header">
       <h1>AI恋爱大师</h1>
       <p v-if="chatId">聊天ID: {{ chatId }}</p>
     </div>
-    
+
     <div class="chat-messages" ref="messagesContainer">
-      <div 
-        v-for="(message, index) in messages" 
-        :key="index" 
+      <div
+        v-for="(message, index) in messages"
+        :key="index"
         :class="['message', message.isUser ? 'message-user' : 'message-ai']"
       >
         <div v-if="!message.isUser" class="message-avatar">
@@ -99,11 +99,11 @@
         </div>
       </div>
     </div>
-    
+
     <div class="chat-input">
-      <input 
-        v-model="inputMessage" 
-        placeholder="请输入您的问题..." 
+      <input
+        v-model="inputMessage"
+        placeholder="请输入您的问题..."
         @keyup.enter="sendMessage"
         :disabled="isWaitingForResponse"
       />
@@ -111,7 +111,7 @@
         {{ isWaitingForResponse ? '等待回复...' : '发送' }}
       </button>
     </div>
-    
+
     <TheFooter />
   </div>
 </template>
@@ -140,30 +140,30 @@ export default {
     const messagesContainer = ref(null)
     const isWaitingForResponse = ref(false)
     let chatConnection = null
-    
+
     // 侧边栏折叠状态
     const sidebarCollapsed = ref(false)
-    
+
     // 监听侧边栏折叠状态变化
     const updateSidebarState = (collapsed) => {
       sidebarCollapsed.value = collapsed
     }
-    
+
     // 会话管理相关状态
     const currentConversationId = ref(null)
-    
+
     // 用户登录相关状态
     const showAuthModal = ref(false)
     const activeAuthTab = ref('login')
     const isLoggedIn = ref(false)
     const username = ref('')
     const showLoginNotice = ref(false)
-    
+
     // 获取用户名首字母作为头像
     const usernameInitial = computed(() => {
       return username.value ? username.value.charAt(0).toUpperCase() : '?'
     })
-    
+
     // 容器类计算属性，根据侧边栏状态更新
     const containerClasses = computed(() => {
       return {
@@ -171,37 +171,47 @@ export default {
         'sidebar-collapsed': sidebarCollapsed.value
       }
     })
-    
+
     // 显示登录表单
     const showLoginForm = () => {
       activeAuthTab.value = 'login'
       showAuthModal.value = true
       showLoginNotice.value = false
     }
-    
+
     // 显示注册表单
     const showRegisterForm = () => {
       activeAuthTab.value = 'register'
       showAuthModal.value = true
       showLoginNotice.value = false
     }
-    
+
     // 关闭登录提示
     const dismissLoginNotice = () => {
       showLoginNotice.value = false
     }
-    
+
     // 检查登录状态
     const checkLoginStatus = async () => {
       const token = localStorage.getItem('Authorization')
       if (token) {
         try {
-          // 调用接口校验token
-          const response = await authApi.getUserInfo(token)
-          if (response.code === 0 && response.data) {
-            isLoggedIn.value = true
-            username.value = response.data.username
-            return true
+          // 使用 isLogin 接口检查登录状态
+          const response = await authApi.isLogin()
+          if (response.code === 0 && response.data === true) {
+            // 获取用户信息
+            const userInfoResponse = await authApi.getUserInfo()
+            if (userInfoResponse.code === 0 && userInfoResponse.data) {
+              isLoggedIn.value = true
+              username.value = userInfoResponse.data.username
+              return true
+            } else {
+              // token无效
+              localStorage.removeItem('Authorization')
+              isLoggedIn.value = false
+              showLoginNotice.value = true
+              return false
+            }
           } else {
             // token无效
             localStorage.removeItem('Authorization')
@@ -210,7 +220,7 @@ export default {
             return false
           }
         } catch (error) {
-          console.error('获取用户信息失败', error)
+          console.error('检查登录状态失败', error)
           localStorage.removeItem('Authorization')
           isLoggedIn.value = false
           showLoginNotice.value = true
@@ -221,17 +231,17 @@ export default {
         return false
       }
     }
-    
+
     // 登录成功处理
     const handleLoginSuccess = (userData) => {
       isLoggedIn.value = true
       username.value = userData.username
       closeModal()
-      
-      // 登录成功后创建初始会话
+
+      // 登录成功后创建初始会话或恢复上次会话
       createInitialConversation()
     }
-    
+
     // 登出处理
     const handleLogout = async () => {
       const token = localStorage.getItem('Authorization')
@@ -242,27 +252,33 @@ export default {
           console.error('登出失败', error)
         } finally {
           localStorage.removeItem('Authorization')
+          // 清除保存的会话ID
+          localStorage.removeItem('loveapp_current_conversation_id')
           isLoggedIn.value = false
           username.value = ''
           // 清空当前会话
           currentConversationId.value = null
+          chatId.value = ''
           showLoginNotice.value = true
         }
       } else {
         localStorage.removeItem('Authorization')
+        // 清除保存的会话ID
+        localStorage.removeItem('loveapp_current_conversation_id')
         isLoggedIn.value = false
         username.value = ''
         // 清空当前会话
         currentConversationId.value = null
+        chatId.value = ''
         showLoginNotice.value = true
       }
     }
-    
+
     // 关闭登录弹窗
     const closeModal = () => {
       showAuthModal.value = false
     }
-    
+
     // 自动滚动到底部
     const scrollToBottom = async () => {
       await nextTick()
@@ -276,21 +292,20 @@ export default {
       scrollToBottom()
     }, { deep: true })
 
-    // 初始化聊天，生成聊天ID
+    // 初始化聊天
     onMounted(() => {
-      chatId.value = generateChatId()
       messages.value.push({
         content: '你好，我是AI恋爱大师，很高兴为你提供情感咨询和恋爱建议。请告诉我你想了解的问题？',
         isUser: false,
         isTyping: false
       })
-      
+
       // 创建网格背景效果
       initCyberGrid();
-      
+
       // 设置页面标题和元数据
       document.title = 'AI恋爱大师 - 您的专属情感顾问'
-      
+
       // 创建meta描述标签
       if (!document.querySelector('meta[name="description"]')) {
         const metaDesc = document.createElement('meta')
@@ -298,12 +313,12 @@ export default {
         metaDesc.content = 'AI恋爱大师为您提供专业的情感咨询和恋爱建议，解决您的感情困惑。'
         document.head.appendChild(metaDesc)
       }
-      
+
       // 检查用户登录状态
       checkLoginStatus().then(() => {
         // 只有登录后才创建会话
         if (isLoggedIn.value) {
-          // 自动创建一个新的会话
+          // 自动创建一个新的会话或恢复上次会话
           createInitialConversation()
         } else {
           // 未登录提示
@@ -312,34 +327,54 @@ export default {
         }
       })
     })
-    
+
     // 创建初始会话
     const createInitialConversation = async () => {
-      try {
-        // 创建新会话
-        const response = await conversationApi.createConversation('love-app')
-        currentConversationId.value = response.data.id
-      } catch (error) {
-        console.error('创建初始会话失败:', error)
+      // 先尝试加载上次的会话
+      const conversationLoaded = await loadCurrentConversation()
+
+      // 如果没有加载到有效会话，则创建新会话
+      if (!conversationLoaded) {
+        try {
+          // 创建新会话
+          const response = await conversationApi.createConversation('love-app')
+          currentConversationId.value = response.data.id
+
+          // 保存到本地存储
+          saveCurrentConversation(currentConversationId.value)
+
+          // 设置聊天ID用于显示
+          chatId.value = currentConversationId.value
+
+          console.log('已创建新会话:', currentConversationId.value)
+        } catch (error) {
+          console.error('创建初始会话失败:', error)
+        }
       }
     }
-    
+
     // 处理选择会话
     const handleConversationSelected = async (conversation) => {
       try {
         if (currentConversationId.value === conversation.id) {
           return // 已经是当前会话，无需切换
         }
-        
+
         // 更新当前会话ID
         currentConversationId.value = conversation.id
-        
+
+        // 保存到本地存储
+        saveCurrentConversation(currentConversationId.value)
+
+        // 设置聊天ID用于显示
+        chatId.value = currentConversationId.value
+
         // 加载会话消息历史
         const response = await conversationApi.getConversationMessages(conversation.id)
-        
+
         // 清空当前消息列表
         messages.value = []
-        
+
         // 将历史消息按正确格式添加到消息列表
         const historyMessages = response.data.messages
         historyMessages.forEach(msg => {
@@ -349,7 +384,7 @@ export default {
             isTyping: false
           })
         })
-        
+
         // 如果没有历史消息，添加一条默认欢迎消息
         if (messages.value.length === 0) {
           messages.value.push({
@@ -362,11 +397,17 @@ export default {
         console.error('加载会话消息失败:', error)
       }
     }
-    
+
     // 处理创建会话
     const handleConversationCreated = (conversation) => {
       currentConversationId.value = conversation.id
-      
+
+      // 保存到本地存储
+      saveCurrentConversation(currentConversationId.value)
+
+      // 设置聊天ID用于显示
+      chatId.value = currentConversationId.value
+
       // 清空当前消息列表，添加默认欢迎消息
       messages.value = [{
         content: '你好，我是AI恋爱大师，很高兴为你提供情感咨询和恋爱建议。请告诉我你想了解的问题？',
@@ -374,7 +415,7 @@ export default {
         isTyping: false
       }]
     }
-    
+
     // 创建网格背景
     const initCyberGrid = () => {
       if (typeof document !== 'undefined') {
@@ -386,7 +427,7 @@ export default {
             line.style.left = `${Math.random() * 100}%`;
             line.style.animationDelay = `${Math.random() * 5}s`;
             line.style.height = `${Math.random() * 30 + 70}%`;
-            
+
             grid.appendChild(line);
           }
         }
@@ -397,6 +438,17 @@ export default {
     const sendMessage = () => {
       if (!inputMessage.value.trim() || isWaitingForResponse.value) return
 
+      // 检查是否有有效的会话ID
+      if (!currentConversationId.value) {
+        console.error('没有有效的会话ID，无法发送消息')
+        // 尝试创建新会话
+        createInitialConversation().then(() => {
+          // 递归调用自身，此时应该有会话ID了
+          setTimeout(() => sendMessage(), 500)
+        })
+        return
+      }
+
       // 添加用户消息
       const userMessage = inputMessage.value
       messages.value.push({
@@ -404,29 +456,31 @@ export default {
         isUser: true,
         isTyping: false
       })
-      
+
       // 清空输入框并设置等待状态
       inputMessage.value = ''
       isWaitingForResponse.value = true
-      
+
       // 关闭上一个连接（如果存在）
       if (chatConnection) {
         chatConnection.close()
       }
-      
+
       // 添加AI消息占位符
       messages.value.push({
         content: '',
         isUser: false,
         isTyping: true
       })
-      
+
       let aiResponseIndex = messages.value.length - 1
-      
-      // 建立新连接并发送消息
+
+      console.log('使用会话ID发送消息:', currentConversationId.value)
+
+      // 建立新连接并发送消息 - 使用currentConversationId
       chatConnection = chatWithLoveApp(
         userMessage,
-        chatId.value,
+        currentConversationId.value,
         (data) => {
           // 更新AI消息内容
           messages.value[aiResponseIndex].content += data
@@ -454,24 +508,22 @@ export default {
             clearInterval(timeoutCheck)
           }
           chatConnection = null
-        },
-        // 添加会话ID参数
-        currentConversationId.value
+        }
       )
-      
+
       // 改进超时检测机制 - 作为备用方案
       let timeoutCheck = null;
       const checkMessageComplete = () => {
         if (chatConnection) {
           let lastContent = messages.value[aiResponseIndex].content;
           let noChangeCounter = 0;
-          
+
           // 使用间隔检查，而不是嵌套setTimeout
           timeoutCheck = setInterval(() => {
             // 检查内容是否有变化
             if (lastContent === messages.value[aiResponseIndex].content) {
               noChangeCounter++;
-              
+
               // 如果连续5次检查内容没变化，则认为流已结束
               if (noChangeCounter >= 5) {
                 clearInterval(timeoutCheck);
@@ -488,8 +540,54 @@ export default {
           }, 1000);
         }
       }
-      
+
       checkMessageComplete()
+    }
+
+    // 在 setup 函数中添加本地存储相关逻辑
+    const loadCurrentConversation = async () => {
+      // 尝试从本地存储获取上次使用的会话ID
+      const savedConversationId = localStorage.getItem('loveapp_current_conversation_id')
+
+      if (savedConversationId) {
+        try {
+          // 验证会话是否存在
+          const response = await conversationApi.getConversationMessages(savedConversationId)
+
+          // 如果会话存在，设置为当前会话
+          currentConversationId.value = savedConversationId
+
+          // 加载历史消息
+          messages.value = []
+          const historyMessages = response.data.messages
+          historyMessages.forEach(msg => {
+            messages.value.push({
+              content: msg.content,
+              isUser: msg.isUser,
+              isTyping: false
+            })
+          })
+
+          // 设置聊天ID用于显示
+          chatId.value = savedConversationId
+
+          console.log('已恢复上次会话:', savedConversationId)
+          return true
+        } catch (error) {
+          console.error('恢复会话失败，将创建新会话:', error)
+          localStorage.removeItem('loveapp_current_conversation_id')
+          return false
+        }
+      }
+      return false
+    }
+
+    // 保存当前会话ID到本地存储
+    const saveCurrentConversation = (conversationId) => {
+      if (conversationId) {
+        localStorage.setItem('loveapp_current_conversation_id', conversationId)
+        console.log('已保存当前会话ID:', conversationId)
+      }
     }
 
     return {
@@ -1069,19 +1167,19 @@ input:disabled {
     top: 0.5rem;
     right: 1rem;
   }
-  
+
   .auth-buttons {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .auth-button {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
   }
-  
+
   .chat-container {
     padding-left: 0;
   }
 }
-</style> 
+</style>

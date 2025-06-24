@@ -2,100 +2,100 @@
   <div class="auth-container">
     <!-- 登录/注册切换按钮 -->
     <div class="auth-tabs">
-      <button 
-        class="auth-tab" 
-        :class="{ 'active': activeTab === 'login' }" 
+      <button
+        class="auth-tab"
+        :class="{ 'active': activeTab === 'login' }"
         @click="activeTab = 'login'"
       >登录</button>
-      <button 
-        class="auth-tab" 
-        :class="{ 'active': activeTab === 'register' }" 
+      <button
+        class="auth-tab"
+        :class="{ 'active': activeTab === 'register' }"
         @click="activeTab = 'register'"
       >注册</button>
       <div class="tab-indicator" :class="activeTab"></div>
     </div>
-    
+
     <!-- 错误提示信息 -->
     <div v-if="errorMsg" class="error-message">
       {{ errorMsg }}
     </div>
-    
+
     <!-- 成功提示信息 -->
     <div v-if="successMsg" class="success-message">
       {{ successMsg }}
     </div>
-    
+
     <!-- 登录表单 -->
     <div v-if="activeTab === 'login'" class="auth-form">
       <div class="form-group">
         <div class="input-wrapper">
-          <input 
-            type="text" 
-            v-model="loginForm.username" 
+          <input
+            type="text"
+            v-model="loginForm.username"
             placeholder="用户名"
             class="cyber-input"
           />
           <div class="input-glow"></div>
         </div>
       </div>
-      
+
       <div class="form-group">
         <div class="input-wrapper">
-          <input 
-            type="password" 
-            v-model="loginForm.password" 
+          <input
+            type="password"
+            v-model="loginForm.password"
             placeholder="密码"
             class="cyber-input"
           />
           <div class="input-glow"></div>
         </div>
       </div>
-      
+
       <button @click="handleLogin" class="auth-button login-button">
         <span v-if="!isLoading">登录</span>
         <span v-else class="loading-spinner"></span>
         <div class="button-glow"></div>
       </button>
     </div>
-    
+
     <!-- 注册表单 -->
     <div v-if="activeTab === 'register'" class="auth-form">
       <div class="form-group">
         <div class="input-wrapper">
-          <input 
-            type="text" 
-            v-model="registerForm.username" 
+          <input
+            type="text"
+            v-model="registerForm.username"
             placeholder="用户名"
             class="cyber-input"
           />
           <div class="input-glow"></div>
         </div>
       </div>
-      
+
       <div class="form-group">
         <div class="input-wrapper">
-          <input 
-            type="password" 
-            v-model="registerForm.password" 
+          <input
+            type="password"
+            v-model="registerForm.password"
             placeholder="密码"
             class="cyber-input"
           />
           <div class="input-glow"></div>
         </div>
       </div>
-      
+
       <div class="form-group">
         <div class="input-wrapper">
-          <input 
-            type="password" 
-            v-model="registerForm.confirmPassword" 
+          <input
+            type="password"
+            v-model="registerForm.confirmPassword"
             placeholder="确认密码"
             class="cyber-input"
           />
           <div class="input-glow"></div>
         </div>
       </div>
-      
+
       <button @click="handleRegister" class="auth-button register-button">
         <span v-if="!isLoading">注册</span>
         <span v-else class="loading-spinner"></span>
@@ -105,158 +105,173 @@
   </div>
 </template>
 
-<script>
-import { ref, reactive, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { authApi } from '@/services/api'
+<script setup>
+import { ref, reactive } from 'vue'
+import axios from 'axios'
+import { API_URL, authApi, apiClient } from '../services/api.js'
 
-export default {
-  name: 'AuthComponent',
-  emits: ['login-success', 'close'],
-  props: {
-    show: {
-      type: Boolean,
-      default: false
-    },
-    initialTab: {
-      type: String,
-      default: 'login'
+// Props
+const props = defineProps({
+  initialTab: {
+    type: String,
+    default: 'login'
+  }
+})
+
+// Emits
+const emit = defineEmits(['login-success', 'close'])
+
+// 状态变量
+const activeTab = ref(props.initialTab)
+const isLoading = ref(false)
+const successMsg = ref('')
+const errorMsg = ref('')
+
+// 表单数据
+const loginForm = reactive({
+  username: '',
+  password: ''
+})
+
+const registerForm = reactive({
+  username: '',
+  password: '',
+  confirmPassword: ''
+})
+
+// 清除消息
+const clearMessages = () => {
+  successMsg.value = ''
+  errorMsg.value = ''
+}
+
+// 设置定时消息
+const setTimedMessage = (msgRef, message, duration = 3000) => {
+  msgRef.value = message
+  setTimeout(() => {
+    msgRef.value = ''
+  }, duration)
+}
+
+// 切换标签
+const switchTab = (tab) => {
+  activeTab.value = tab
+  clearMessages()
+}
+
+// 登录处理
+const handleLogin = async () => {
+  clearMessages()
+
+  if (!loginForm.username || !loginForm.password) {
+    setTimedMessage(errorMsg, '请输入用户名和密码')
+    return
+  }
+
+  try {
+    isLoading.value = true
+    console.log('开始登录请求...')
+
+    const response = await apiClient.post('/user/login', {
+      username: loginForm.username,
+      password: loginForm.password
+    })
+
+    console.log('登录响应:', response)
+
+    // 检查响应结构
+    if (response.data && response.data.code === 0) {
+      const authToken = response.data.data?.Authorization
+
+      if (authToken) {
+        // 直接保存token，不添加Bearer前缀
+        localStorage.setItem('Authorization', authToken)
+
+        // 设置axios默认headers
+        axios.defaults.headers.common['Authorization'] = authToken
+
+        // 显示成功消息
+        setTimedMessage(successMsg, '登录成功')
+
+        // 触发登录成功事件
+        setTimeout(() => {
+          emit('login-success', {
+            username: loginForm.username,
+            token: authToken
+          })
+        }, 1000)
+      } else {
+        throw new Error('登录成功但未获取到授权令牌')
+      }
+    } else {
+      throw new Error(response.data?.message || '登录失败，请稍后再试')
     }
-  },
-  setup(props, { emit }) {
-    const router = useRouter()
-    const activeTab = ref(props.initialTab)
-    const isLoading = ref(false)
-    const errorMsg = ref('')
-    const successMsg = ref('')
-    
-    const loginForm = reactive({
-      username: '',
-      password: ''
-    })
-    
-    const registerForm = reactive({
-      username: '',
-      password: '',
-      confirmPassword: ''
-    })
-    
-    // 监听初始标签变化
-    watch(() => props.initialTab, (newVal) => {
-      activeTab.value = newVal
-    })
-    
-    // 清除消息
-    const clearMessages = () => {
-      errorMsg.value = ''
-      successMsg.value = ''
+  } catch (error) {
+    console.error('登录失败', error)
+    let errorMessage = '登录失败，请稍后再试'
+
+    if (error.response) {
+      errorMessage = error.response.data?.message || `服务器错误: ${error.response.status}`
+    } else if (error.request) {
+      errorMessage = '无法连接到服务器，请检查网络连接'
+    } else if (error.message) {
+      errorMessage = error.message
     }
-    
-    // 设置消息自动消失
-    const setTimedMessage = (msgRef, content, duration = 3000) => {
-      msgRef.value = content
+
+    setTimedMessage(errorMsg, errorMessage)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// 注册处理
+const handleRegister = async () => {
+  clearMessages()
+
+  if (!registerForm.username || !registerForm.password) {
+    setTimedMessage(errorMsg, '请输入用户名和密码')
+    return
+  }
+
+  if (registerForm.password !== registerForm.confirmPassword) {
+    setTimedMessage(errorMsg, '两次输入的密码不一致')
+    return
+  }
+
+  try {
+    isLoading.value = true
+    const response = await axios.post(`/api/user/register`, {
+      username: registerForm.username,
+      password: registerForm.password
+    })
+
+    if (response.data && response.data.code === 0) {
+      setTimedMessage(successMsg, '注册成功，请登录')
+      // 切换到登录标签
       setTimeout(() => {
-        msgRef.value = ''
-      }, duration)
+        switchTab('login')
+        // 预填充登录表单
+        loginForm.username = registerForm.username
+        loginForm.password = ''
+      }, 1500)
+    } else {
+      throw new Error(response.data?.message || '注册失败，请稍后再试')
     }
-    
-    // 登录处理
-    const handleLogin = async () => {
-      clearMessages()
-      
-      if (!loginForm.username || !loginForm.password) {
-        setTimedMessage(errorMsg, '请输入用户名和密码')
-        return
-      }
-      
-      try {
-        isLoading.value = true
-        console.log('开始登录请求...')
-        const response = await authApi.login(loginForm.username, loginForm.password)
-        
-        console.log('登录响应:', response)
-        
-        // 保存token到localStorage
-        if (response.code === 0 && response.data) {
-          localStorage.setItem('Authorization', response.data.Authorization)
-          
-          // 显示成功消息
-          setTimedMessage(successMsg, '登录成功')
-          
-          // 触发登录成功事件
-          setTimeout(() => {
-            emit('login-success', { 
-              username: loginForm.username,
-              ...response.data
-            })
-          }, 1000)
-        } else {
-          throw new Error(response.message || '登录失败，请稍后再试')
-        }
-      } catch (error) {
-        console.error('登录失败', error)
-        setTimedMessage(errorMsg, error?.message || '登录失败，请稍后再试')
-      } finally {
-        isLoading.value = false
-      }
+  } catch (error) {
+    console.error('注册失败', error)
+    let errorMessage = '注册失败，请稍后再试'
+
+    if (error.response) {
+      errorMessage = error.response.data?.message || `服务器错误: ${error.response.status}`
+    } else if (error.request) {
+      errorMessage = '无法连接到服务器，请检查网络连接'
+    } else if (error.message) {
+      errorMessage = error.message
     }
-    
-    // 注册处理
-    const handleRegister = async () => {
-      clearMessages()
-      
-      if (!registerForm.username || !registerForm.password) {
-        setTimedMessage(errorMsg, '请输入用户名和密码')
-        return
-      }
-      
-      if (registerForm.password !== registerForm.confirmPassword) {
-        setTimedMessage(errorMsg, '两次输入的密码不一致')
-        return
-      }
-      
-      try {
-        isLoading.value = true
-        console.log('开始注册请求...')
-        const response = await authApi.register(registerForm.username, registerForm.password)
-        
-        console.log('注册响应:', response)
-        
-        if (response.code === 0) {
-          console.log('注册成功')
-          setTimedMessage(successMsg, '注册成功，请登录')
-          
-          setTimeout(() => {
-            activeTab.value = 'login'
-            loginForm.username = registerForm.username
-            loginForm.password = ''
-          }, 1000)
-        } else {
-          throw new Error(response.message || '注册失败，请稍后再试')
-        }
-      } catch (error) {
-        console.error('注册失败', error)
-        setTimedMessage(errorMsg, error?.message || '注册失败，请稍后再试')
-      } finally {
-        isLoading.value = false
-      }
-    }
-    
-    // 组件挂载时设置初始标签
-    onMounted(() => {
-      activeTab.value = props.initialTab
-    })
-    
-    return {
-      activeTab,
-      loginForm,
-      registerForm,
-      isLoading,
-      errorMsg,
-      successMsg,
-      handleLogin,
-      handleRegister
-    }
+
+    setTimedMessage(errorMsg, errorMessage)
+  } finally {
+    isLoading.value = false
   }
 }
 </script>
@@ -284,9 +299,9 @@ export default {
   width: 200%;
   height: 200%;
   background: linear-gradient(
-    45deg, 
-    transparent, 
-    rgba(58, 134, 255, 0.05), 
+    45deg,
+    transparent,
+    rgba(58, 134, 255, 0.05),
     transparent
   );
   animation: rotate 10s linear infinite;
@@ -487,4 +502,4 @@ export default {
   0% { opacity: 0; transform: translateY(10px); }
   100% { opacity: 1; transform: translateY(0); }
 }
-</style> 
+</style>
