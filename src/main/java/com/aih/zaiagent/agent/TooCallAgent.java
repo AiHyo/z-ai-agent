@@ -91,7 +91,7 @@ public class TooCallAgent extends ReActAgent {
             String result = assistantMessage.getText();
             this.setThinkResult(result); // 记录AI思考结果，用于返回
             log.info("AI 思考过程：{}", getThinkResult());
-            this.getConversationService().saveMessage(this.getChatId(), this.getUserId(), result, "ai"); // 手动存入数据库
+            // this.getConversationService().saveMessage(this.getChatId(), this.getUserId(), result, "ai"); // 返回到baseAgent再处理
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
             String toolCallInfo = toolCallList.stream()
                     .map(toolCall -> String.format("工具：%s, 参数：%s", toolCall.name(), toolCall.arguments()))
@@ -145,7 +145,7 @@ public class TooCallAgent extends ReActAgent {
                 .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
                 .collect(Collectors.joining("\n"));
         log.info(results);
-        this.getConversationService().saveMessage(this.getChatId(), this.getUserId(), results, "ai"); // 手动存入数据库
+        // this.getConversationService().saveMessage(this.getChatId(), this.getUserId(), results, "ai"); // 返回到baseAgent再处理
         return results;
     }
 }

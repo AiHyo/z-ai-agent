@@ -34,7 +34,7 @@ public class WebSpiderTool {
         try {
             Document doc = Jsoup.connect(url)
                     .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-                    .timeout(30000)
+                    .timeout(30000)  // 设置超时时间为30秒
                     .get();
 
             // 获取页面标题
@@ -64,13 +64,13 @@ public class WebSpiderTool {
             // 构建响应
             StringBuilder response = new StringBuilder();
             response.append("# 网页分析: ").append(title).append("\n\n");
-            response.append("URL: ").append(url).append("\n\n");
+            response.append("URL: ").append(url).append("\n");
 
             response.append("## 页面概览\n");
-            response.append(text.length() > 300 ? text.substring(0, 300) + "..." : text).append("\n\n");
+            response.append(text.length() > 300 ? text.substring(0, 300) + "..." : text).append("\n");
 
             response.append("## 主要内容\n");
-            response.append(mainContent.length() > 1000 ? mainContent.substring(0, 1000) + "..." : mainContent).append("\n\n");
+            response.append(mainContent.length() > 1000 ? mainContent.substring(0, 1000) + "..." : mainContent).append("\n");
 
             response.append("## 页面链接\n");
             response.append(links.length() > 0 ? links.toString() : "未找到链接").append("\n");

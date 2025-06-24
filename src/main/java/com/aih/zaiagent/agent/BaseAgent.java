@@ -159,12 +159,14 @@ public abstract class BaseAgent {
                     }
                     // 执行单个步骤，发送结果到客户端[thinkResult + actResult]
                     String[] stepResult = step();
-                    sseEmitter.send("Step " + currentStep + ": " );
-                    conversationService.saveMessage(chatId, userId, "Step " + currentStep + ": ", "ai");
+                    // sseEmitter.send("Step " + currentStep + ": " ); 不自主加步骤，否则在记忆中，ai会模仿生成步骤，导致重复
+                    // conversationService.saveMessage(chatId, userId, "Step " + currentStep + ": ", "ai");
                     for (String result : stepResult) {
                         log.info("sseEmitter.send,{}",result);
-                        sseEmitter.send(result.replace("\n", "<br>") + "<br>");
-                        conversationService.saveMessage(chatId, userId, result, "ai");
+                        if(StrUtil.isNotBlank(result)) {
+                            sseEmitter.send(result.replace("\n", "<br>") + "<br>");
+                            conversationService.saveMessage(chatId, userId, result, "ai");
+                        }
                     }
                 }
                 // 结束后，发送完成消息

@@ -26,25 +26,25 @@ public class WebSearchTool {
      * 执行网页搜索（带自定义参数）
      * @param query 搜索关键词
      * @param maxResults 最大结果数量
-     * @param maxQuestions 最大相关问题数量
+     * @param maxRelatedSearchCount 最大相关问题数量
      * @return JSON格式的搜索结果
      */
     @Tool(name = "searchWebCustom", description = "Search for information from Bing Search Engine with custom parameters. Use this tool when you need to find up-to-date information with specific result count.")
     public String searchWebCustom(
         @ToolParam(description = "Search query keyword. Should be specific and concise.") String query,
         @ToolParam(description = "Maximum number of search results to return (1-10). Default is 5.") Integer maxResults,
-        @ToolParam(description = "Maximum number of related questions to return (0-5). Default is 3.") Integer maxQuestions
+        @ToolParam(description = "Maximum number of related searches to return (0-5). Default is 3.") Integer maxRelatedSearchCount
     ) {
         try {
             // 参数验证和默认值设置
             int resultCount = (maxResults != null && maxResults > 0 && maxResults <= 10) ? maxResults : 5;
-            int questionCount = (maxQuestions != null && maxQuestions >= 0 && maxQuestions <= 5) ? maxQuestions : 3;
+            int relatedSearchCount = (maxRelatedSearchCount != null && maxRelatedSearchCount >= 0 && maxRelatedSearchCount <= 5) ? maxRelatedSearchCount : 3;
 
             String response = HttpRequest.get(API_URL)
                     .form("engine", ENGINE)
                     .form("q", query)
                     .form("api_key", apiKey)
-                    .timeout(30000) // 增加到30秒
+                    .timeout(120000) // 增加到120秒
                     .execute()
                     .body();
 
@@ -60,13 +60,13 @@ public class WebSearchTool {
 
             // 添加有机搜索结果
             if (jsonResponse.containsKey("organic_results")) {
-                formattedResults.append("## 搜索结果\n\n");
+                formattedResults.append("## 搜索结果\n");
                 JSONArray results = jsonResponse.getJSONArray("organic_results");
                 int count = Math.min(results.size(), resultCount);
 
                 for (int i = 0; i < count; i++) {
                     JSONObject result = results.getJSONObject(i);
-                    formattedResults.append(i+1).append(". **").append(result.getStr("title", "无标题")).append("**\n");
+                    formattedResults.append(i+1).append(". 《").append(result.getStr("title", "无标题")).append("》\n");
                     formattedResults.append("   ").append(result.getStr("snippet", "无描述")).append("\n");
                     formattedResults.append("   链接: ").append(result.getStr("link", "无链接")).append("\n\n");
                 }
@@ -76,7 +76,7 @@ public class WebSearchTool {
             if (formattedResults.length() == 0 && jsonResponse.containsKey("local_results") &&
                 !jsonResponse.getJSONArray("local_results").isEmpty()) {
 
-                formattedResults.append("## 本地景点\n\n");
+                formattedResults.append("## 本地景点\n");
                 JSONArray localResults = jsonResponse.getJSONArray("local_results");
                 int count = Math.min(localResults.size(), resultCount);
 
@@ -99,17 +99,18 @@ public class WebSearchTool {
                 }
             }
 
-            // 添加相关问题（如果需要）
-            if (questionCount > 0 && jsonResponse.containsKey("related_questions") &&
-                !jsonResponse.getJSONArray("related_questions").isEmpty()) {
-                formattedResults.append("## 相关问题\n\n");
-                JSONArray relatedQuestions = jsonResponse.getJSONArray("related_questions");
-                int count = Math.min(relatedQuestions.size(), questionCount);
-
-                for (int i = 0; i < count; i++) {
-                    JSONObject question = relatedQuestions.getJSONObject(i);
-                    formattedResults.append("Q: ").append(question.getStr("question", "")).append("\n");
-                    formattedResults.append("A: ").append(question.getStr("answer", "")).append("\n\n");
+            if (jsonResponse.containsKey("related_searches")) {
+                JSONArray relatedSearches = jsonResponse.getJSONArray("related_searches");
+                if (!relatedSearches.isEmpty()) {
+                    formattedResults.append("=> 相关搜索\n");
+                    int count = Math.min(relatedSearches.size(), relatedSearchCount);
+                    for (int i = 0; i < count; i++) {
+                        JSONObject item = relatedSearches.getJSONObject(i);
+                        String relatedQuery = item.getStr("query", "");
+                        String relatedLink = item.getStr("link", "");
+                        formattedResults.append(i + 1).append(". [").append(relatedQuery).append("](").append(relatedLink).append(")\n");
+                    }
+                    formattedResults.append("\n");
                 }
             }
 
