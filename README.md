@@ -1,4 +1,5 @@
-# Z-AI-Agent：智能AI代理平台
+# Z-AI-Agent：智能AI代理平台<a href="https://deepwiki.com/AiHyo/z-ai-agent"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+
 
 <div align="center">
   <img src="https://img.shields.io/badge/Java-21-orange" alt="Java 21"/>
