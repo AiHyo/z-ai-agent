@@ -1,5 +1,6 @@
 package com.aih.zaiagent.tools;
 
+import cn.hutool.core.io.resource.ClassPathResource;
 import com.aih.zaiagent.service.TencentCosService;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;

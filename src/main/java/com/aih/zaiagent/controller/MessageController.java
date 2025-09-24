@@ -1,8 +1,8 @@
 package com.aih.zaiagent.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.aih.zaiagent.common.BaseResponse;
 import com.aih.zaiagent.common.ResultUtils;
-import com.aih.zaiagent.dto.MessageSaveRequest;
 import com.aih.zaiagent.entity.MessageDB;
 import com.aih.zaiagent.exception.BusinessException;
 import com.aih.zaiagent.exception.ErrorCode;
@@ -27,50 +27,12 @@ public class MessageController {
     private final UserService userService;
 
     /**
-     * 保存消息（用于流式输出完成后保存）
-     */
-    @PostMapping("/save")
-    public BaseResponse<MessageDB> saveMessage(@RequestBody MessageSaveRequest request) {
-        log.info("保存消息请求: conversationId={}", request.getConversationId());
-
-        // 权限检查
-        Long userId = userService.getCurrentUser().getId();
-
-        // 验证会话所属权
-        if (!conversationService.isConversationOwner(request.getConversationId(), userId)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权访问此会话");
-        }
-
-        // 保存用户消息
-        MessageDB userMessage = conversationService.saveMessage(
-                request.getConversationId(),
-                userId,
-                request.getUserMessage(),
-                "user"
-        );
-
-        // 保存AI回复
-        MessageDB aiMessage = conversationService.saveMessage(
-                request.getConversationId(),
-                userId,
-                request.getAiResponse(),
-                "ai"
-        );
-
-        // 更新会话最后一条消息（用于会话列表展示）
-        conversationService.updateLastMessage(request.getConversationId(), request.getAiResponse());
-
-        return ResultUtils.success(aiMessage);
-    }
-
-    /**
      * 获取会话的所有消息
      */
     @GetMapping("/list/{conversationId}")
     public BaseResponse<List<MessageDB>> getMessages(@PathVariable String conversationId) {
         // 权限检查
-        Long userId = userService.getCurrentUser().getId();
-
+        Long userId = StpUtil.getLoginIdAsLong();
         // 验证会话所属权
         if (!conversationService.isConversationOwner(conversationId, userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权访问此会话");
@@ -80,5 +42,15 @@ public class MessageController {
         List<MessageDB> messages = conversationService.getConversationMessages(conversationId);
 
         return ResultUtils.success(messages);
+    }
+
+    @DeleteMapping("/{messageId}")
+    public BaseResponse<String> deleteMessage(@PathVariable Long messageId) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        if (!conversationService.isMessageOwner(messageId, userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权删除此消息");
+        }
+        conversationService.deleteMessage(messageId);
+        return ResultUtils.success("删除成功");
     }
 }

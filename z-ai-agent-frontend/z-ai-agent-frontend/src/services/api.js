@@ -228,6 +228,17 @@ const conversationApi = {
       console.error('保存会话消息失败:', error)
       throw error.response?.data || error
     }
+  },
+
+  // 删除消息
+  deleteMessage: async (messageId) => {
+    try {
+      const response = await apiClient.delete(`/message/${messageId}`)
+      return response.data
+    } catch (error) {
+      console.error('删除消息失败:', error)
+      throw error.response?.data || error
+    }
   }
 }
 
@@ -439,7 +450,7 @@ export const chatWithLoveApp = (message, conversationId, onMessage, onError, onC
       console.log('SSE连接超时，自动关闭')
       completeConnection()
     }
-  }, 30000) // 30秒超时
+  }, 180000) // 修改为3分钟超时
 
   // 返回一个可以关闭连接的对象
   return {
@@ -508,10 +519,10 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
   const connectSSE = () => {
     // 如果已完成，不再尝试连接
     if (isCompleted) return;
-    
+
     // 每次连接前创建新的AbortController
     abortController = new AbortController();
-    
+
     console.log(`尝试SSE连接 (尝试次数: ${reconnectAttempt + 1}/${maxReconnects + 1})`)
 
     // 使用Fetch API替代EventSource
@@ -530,7 +541,7 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`)
       }
-      
+
       // 连接成功，重置重试计数
       reconnectAttempt = 0
       console.log('SSE连接已成功建立')
@@ -560,7 +571,7 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
 
           // 更新最后接收时间
           lastReceiveTime = Date.now()
-          
+
           // 重置任何活动的超时检测
           if (timeoutId) {
             clearTimeout(timeoutId);
@@ -569,9 +580,9 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
                 console.log('SSE连接超时，自动关闭')
                 completeConnection()
               }
-            }, 300000); // 从30秒(30000)修改为5分钟(300000)
+            }, 180000); // 修改为3分钟超时
           }
-          
+
           const chunk = decoder.decode(value, { stream: true })
           console.log('收到SSE数据块:', chunk)
 
@@ -619,7 +630,7 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
           // 只处理非中止错误
           if (error.name !== 'AbortError' && !isCompleted) {
             console.error('SSE读取错误:', error)
-            
+
             // 尝试重连，除非已达到最大重试次数
             if (reconnectAttempt < maxReconnects) {
               reconnectAttempt++;
@@ -641,7 +652,7 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
     .catch(error => {
       if (!isCompleted && error.name !== 'AbortError') {
         console.error('SSE连接错误:', error)
-        
+
         // 尝试重连，除非已达到最大重试次数
         if (reconnectAttempt < maxReconnects) {
           reconnectAttempt++;
@@ -663,7 +674,7 @@ export const chatWithManus = (message, conversationId, onMessage, onError, onCom
       console.log('SSE连接超时，自动关闭')
       completeConnection()
     }
-  }, 30000) // 30秒超时
+  }, 180000) // 修改为3分钟超时
 
   // 启动SSE连接
   connectSSE();

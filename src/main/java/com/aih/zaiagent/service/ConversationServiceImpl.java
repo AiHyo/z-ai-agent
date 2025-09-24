@@ -349,4 +349,16 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
             this.messageMapper.insert(toSaveMessage);
         }
     }
+
+    @Override
+    public boolean isMessageOwner(Long messageId, Long userId) {
+        MessageDB messageDB = this.messageMapper.selectById(messageId);
+        String conversationId = messageDB.getConversationId();
+        return this.isConversationOwner(conversationId, userId);
+    }
+
+    @Override
+    public int deleteMessage(Long messageId) {
+        return this.messageMapper.deleteById(messageId);
+    }
 }

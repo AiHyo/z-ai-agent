@@ -21,8 +21,6 @@ public class DatabaseChatMemory implements ChatMemory {
     private final ConversationService conversationService;
     private final Long userId;
 
-    // 移除userId字段，改为在方法中动态获取
-
     public DatabaseChatMemory(ConversationService conversationService) {
         this.conversationService = conversationService;
         this.userId = null;

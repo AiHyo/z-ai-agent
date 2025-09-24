@@ -19,18 +19,20 @@ spring:
       base-url: http://localhost:11434
       chat:
         model: gemma3:1b
+    # mcp
     mcp:
       client:
+#        toolcallback:
+#          enabled: true
 #        # 本地，则可以使用stdio模式，并且指定mcp服务配置文件的位置
-#        stdio:
-#          servers-configuration: classpath:mcp-servers.json
-        # 如果是远程，使用sse模式，并且指定mcp服务的地址
-        sse:
-          connections:
-#            amap-maps:
-#              url: https://mcp.amap.com/sse?key=ca85a98bd3a9d0dd276f254f8d4e1426
-            server1:
-              url: http://localhost:8127
+        stdio:
+          servers-configuration: classpath:mcp-servers.json
+#        type: async # 如果需要响应式（Flux）返回，需要使用async模式
+  #      如果是远程，使用sse模式，并且指定mcp服务的地址
+#        sse:
+#          connections:
+#            server1:
+#              url: http://localhost:8127
 #    vectorstore:
 #      pgvector:
 #        index-type: HNSW

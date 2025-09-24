@@ -47,15 +47,14 @@ public class FileOperationTool {
             // 创建临时文件
             File tempFile = File.createTempFile("temp", ".tmp");
             FileUtil.writeUtf8String(content, tempFile);
-            
+
             // 上传到腾讯云COS
             String fileUrl = tencentCosService.uploadFile(fileName, tempFile, COS_DIRECTORY);
-            String fileKey = COS_DIRECTORY + "/" + fileName;
-            
+
             // 删除临时文件
             tempFile.delete();
-            
-            return "File written successfully. Access URL: " + fileUrl + ", Key: " + fileKey;
+
+            return "File written successfully. Access URL: " + fileUrl;
         } catch (Exception e) {
             return "Error writing to file: " + e.getMessage();
         }

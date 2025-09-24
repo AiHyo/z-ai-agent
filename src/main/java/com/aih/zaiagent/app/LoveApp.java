@@ -108,10 +108,14 @@ public class LoveApp {
                 .content();
     }
 
+    @Resource
+    private ToolCallbackProvider toolCallbackProvider;
+
     /**
      * 带用户ID参数的流式对话
      */
     public Flux<String> doChatByStream(String message, String chatId, Long userId) {
+        // ToolCallback[] toolCallbacks = toolCallbackProvider.getToolCallbacks();
         // 为每个请求创建专用的ChatMemory
         DatabaseChatMemory chatMemory = new DatabaseChatMemory(conversationService, userId);
         return chatClient.prompt()
@@ -223,25 +227,25 @@ public class LoveApp {
         return content;
     }
 
-    @Resource
-    private ToolCallbackProvider toolCallbackProvider;
-    // AI 调用 MCP 服务
-    public String doChatWithMcp(String message, String chatId) {
-        ChatResponse response = chatClient
-                .prompt()
-                .user(message)
-                .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20))
-                // 开启日志，便于观察效果
-                .advisors(new MyLoggerAdvisor())
-                // 通过自动注入的 ToolCallbackProvider 获取到配置中定义的 MCP 服务提供的 所有工具，并提供给 ChatClient
-                .tools(toolCallbackProvider)
-                .call()
-                .chatResponse();
-        String content = response.getResult().getOutput().getText();
-        log.info("content: {}", content);
-        return content;
-    }
+    // @Resource
+    // private ToolCallbackProvider toolCallbackProvider;
+    // // AI 调用 MCP 服务
+    // public String doChatWithMcp(String message, String chatId) {
+    //     ChatResponse response = chatClient
+    //             .prompt()
+    //             .user(message)
+    //             .advisors(spec -> spec.param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+    //                     .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 20))
+    //             // 开启日志，便于观察效果
+    //             .advisors(new MyLoggerAdvisor())
+    //             // 通过自动注入的 ToolCallbackProvider 获取到配置中定义的 MCP 服务提供的 所有工具，并提供给 ChatClient
+    //             .tools(toolCallbackProvider)
+    //             .call()
+    //             .chatResponse();
+    //     String content = response.getResult().getOutput().getText();
+    //     log.info("content: {}", content);
+    //     return content;
+    // }
 
 
 

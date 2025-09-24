@@ -84,4 +84,8 @@ public interface ConversationService extends IService<Conversation> {
     void updateLastMessage(String conversationId, String lastMessage);
 
     void mergeAiMessageByConversationId(String conversationId);
+
+    boolean isMessageOwner(Long messageId, Long userId);
+
+    int deleteMessage(Long messageId);
 }

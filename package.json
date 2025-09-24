@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@amap/amap-maps-mcp-server": "^0.0.8",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "marked": "^16.0.0"
+  }
+}

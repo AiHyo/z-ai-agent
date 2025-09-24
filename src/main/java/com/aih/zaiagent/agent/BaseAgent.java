@@ -165,7 +165,9 @@ public abstract class BaseAgent {
                         log.info("sseEmitter.send,{}",result);
                         if(StrUtil.isNotBlank(result)) {
                             sseEmitter.send(result.replace("\n", "<br>") + "<br>");
-                            conversationService.saveMessage(chatId, userId, result, "ai");
+                            if (!"思考完成 - 无需行动".equals(result)){
+                                conversationService.saveMessage(chatId, userId, result, "ai");
+                            }
                         }
                     }
                 }

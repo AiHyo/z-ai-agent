@@ -10,6 +10,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -46,6 +47,9 @@ public class AiController {
 
     @Resource
     private ToolCallback[] availableTools;
+
+    @Resource
+    private ToolCallbackProvider toolCallbackProvider;
 
     @Resource
     private DashScopeChatModel dashscopeChatModel;
@@ -190,6 +194,7 @@ public class AiController {
         StpUtil.checkLogin(); // 校验登陆
         long userId = StpUtil.getLoginIdAsLong();
         MyManus myManus = new MyManus(availableTools, dashscopeChatModel, conversationService);
+        // 初始化会话消息列表
         myManus.initMessageList(conversationId, manusChatMemorySize, userId);
         return myManus.runStream(message);
     }

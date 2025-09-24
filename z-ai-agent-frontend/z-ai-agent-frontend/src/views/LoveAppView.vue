@@ -1,4 +1,4 @@
-，而<template>
+<template>
   <div :class="containerClasses">
     <div class="cyber-grid"></div>
 
@@ -62,7 +62,7 @@
     <!-- 登录/注册弹窗 -->
     <teleport to="body">
       <div v-if="showAuthModal" class="modal-backdrop" @click="closeModal">
-        <div class="modal-content" @click.stop>
+        <div class="auth-modal" @click.stop>
           <button class="close-button" @click="closeModal">×</button>
           <AuthComponent
             :initial-tab="activeAuthTab"
@@ -72,9 +72,31 @@
       </div>
     </teleport>
 
+    <!-- 添加删除确认对话框 -->
+    <teleport to="body">
+      <div v-if="showDeleteModal" class="modal-backdrop" @click="closeDeleteModal">
+        <div class="delete-confirm-modal" @click.stop>
+          <div class="delete-confirm-header">确认删除</div>
+          <div class="delete-confirm-content">确定要删除这条消息吗？此操作无法撤销。</div>
+          <div class="delete-confirm-actions">
+            <button class="cancel-btn" @click="closeDeleteModal">取消</button>
+            <button class="confirm-btn" @click="confirmDelete">删除</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
+
     <div class="chat-header">
-      <h1>AI恋爱大师</h1>
-      <p v-if="chatId">聊天ID: {{ chatId }}</p>
+      <div class="header-left">
+        <button class="back-button" @click="goBack">
+          <span class="back-icon">←</span>
+          <span class="back-text">返回</span>
+        </button>
+      </div>
+      <div class="header-center">
+        <h1>AI恋爱助手</h1>
+        <p v-if="chatId">聊天ID: {{ chatId }}</p>
+      </div>
     </div>
 
     <div class="chat-messages" ref="messagesContainer">
@@ -87,12 +109,29 @@
           <AiAvatar type="love" />
         </div>
         <div class="message-content">
-          {{ message.content }}
+          <!-- 使用pre标签和v-html指令显示格式化后的消息 -->
+          <pre class="message-text" v-html="formatMessage(message.content)"></pre>
+          
           <span v-if="message.isTyping" class="typing-indicator">
             <span class="dot"></span>
             <span class="dot"></span>
             <span class="dot"></span>
           </span>
+          
+          <!-- 添加时间和删除按钮 -->
+          <div class="message-footer">
+            <span class="message-time" v-if="message.createdAt">
+              {{ formatTime(message.createdAt) }}
+            </span>
+            <button 
+              v-if="!isWaitingForResponse" 
+              class="delete-btn" 
+              @click="showDeleteConfirm(message.id, index)"
+              title="删除消息"
+            >
+              <span>🗑️</span>
+            </button>
+          </div>
         </div>
         <div v-if="message.isUser" class="message-avatar">
           <AiAvatar type="user" />
@@ -118,12 +157,17 @@
 
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 // 使用命名导入方式
 import { chatWithLoveApp, generateChatId, conversationApi, authApi } from '@/services/api'
 import AiAvatar from '../components/AiAvatar.vue'
 import TheFooter from '../components/TheFooter.vue'
 import ConversationSidebar from '../components/ConversationSidebar.vue'
 import AuthComponent from '../components/AuthComponent.vue'
+import { marked } from 'marked' // 导入marked
+import hljs from 'highlight.js' // 导入highlight.js
+import 'highlight.js/styles/atom-one-dark.css' // 导入代码高亮样式
+import DOMPurify from 'dompurify' // 导入DOMPurify
 
 export default {
   name: 'LoveAppView',
@@ -134,12 +178,14 @@ export default {
     AuthComponent
   },
   setup() {
+    const router = useRouter()
     const inputMessage = ref('')
     const messages = ref([])
     const chatId = ref('')
     const messagesContainer = ref(null)
     const isWaitingForResponse = ref(false)
     let chatConnection = null
+    let timeoutCheck = null  // 将timeoutCheck声明在这里
 
     // 侧边栏折叠状态
     const sidebarCollapsed = ref(false)
@@ -196,22 +242,12 @@ export default {
       const token = localStorage.getItem('Authorization')
       if (token) {
         try {
-          // 使用 isLogin 接口检查登录状态
-          const response = await authApi.isLogin()
-          if (response.code === 0 && response.data === true) {
-            // 获取用户信息
-            const userInfoResponse = await authApi.getUserInfo()
-            if (userInfoResponse.code === 0 && userInfoResponse.data) {
-              isLoggedIn.value = true
-              username.value = userInfoResponse.data.username
-              return true
-            } else {
-              // token无效
-              localStorage.removeItem('Authorization')
-              isLoggedIn.value = false
-              showLoginNotice.value = true
-              return false
-            }
+          // 调用接口校验token
+          const response = await authApi.getUserInfo(token)
+          if (response.code === 0 && response.data) {
+            isLoggedIn.value = true
+            username.value = response.data.username
+            return true
           } else {
             // token无效
             localStorage.removeItem('Authorization')
@@ -220,7 +256,7 @@ export default {
             return false
           }
         } catch (error) {
-          console.error('检查登录状态失败', error)
+          console.error('获取用户信息失败', error)
           localStorage.removeItem('Authorization')
           isLoggedIn.value = false
           showLoginNotice.value = true
@@ -297,7 +333,8 @@ export default {
       messages.value.push({
         content: '你好，我是AI恋爱大师，很高兴为你提供情感咨询和恋爱建议。请告诉我你想了解的问题？',
         isUser: false,
-        isTyping: false
+        isTyping: false,
+        createdAt: new Date().toISOString()
       })
 
       // 创建网格背景效果
@@ -326,6 +363,33 @@ export default {
           showLoginForm()
         }
       })
+
+      // 配置marked以使用highlight.js进行代码高亮
+      marked.setOptions({
+        highlight: function(code, lang) {
+          // 检查语言是否有效，确保代码块正确高亮
+          try {
+            if (lang && hljs.getLanguage(lang)) {
+              return hljs.highlight(code, { language: lang }).value;
+            } else {
+              // 尝试自动检测语言
+              return hljs.highlightAuto(code).value;
+            }
+          } catch (e) {
+            console.error('代码高亮错误:', e);
+            // 如果高亮失败，返回原代码，至少保证代码显示
+            return code;
+          }
+        },
+        langPrefix: 'hljs language-',
+        gfm: true,            // 启用GitHub风格的Markdown
+        breaks: true,         // 启用回车换行
+        pedantic: false,      // 不使用pedantic模式
+        smartLists: true,     // 使用更智能的列表行为
+        smartypants: false,   // 不使用"智能"排版标点
+        headerIds: false,     // 避免生成标题ID
+        xhtml: false          // 不使用XHTML标签闭合格式
+      });
     })
 
     // 创建初始会话
@@ -379,9 +443,11 @@ export default {
         const historyMessages = response.data.messages
         historyMessages.forEach(msg => {
           messages.value.push({
+            id: msg.id,
             content: msg.content,
             isUser: msg.isUser,
-            isTyping: false
+            isTyping: false,
+            createdAt: msg.createdAt
           })
         })
 
@@ -390,7 +456,8 @@ export default {
           messages.value.push({
             content: '你好，我是AI恋爱大师，很高兴为你提供情感咨询和恋爱建议。请告诉我你想了解的问题？',
             isUser: false,
-            isTyping: false
+            isTyping: false,
+            createdAt: new Date().toISOString()
           })
         }
       } catch (error) {
@@ -412,7 +479,8 @@ export default {
       messages.value = [{
         content: '你好，我是AI恋爱大师，很高兴为你提供情感咨询和恋爱建议。请告诉我你想了解的问题？',
         isUser: false,
-        isTyping: false
+        isTyping: false,
+        createdAt: new Date().toISOString()
       }]
     }
 
@@ -438,6 +506,9 @@ export default {
     const sendMessage = () => {
       if (!inputMessage.value.trim() || isWaitingForResponse.value) return
 
+      // 声明缓冲区
+      let messageBuffer = ''; // 添加消息缓冲区
+
       // 检查是否有有效的会话ID
       if (!currentConversationId.value) {
         console.error('没有有效的会话ID，无法发送消息')
@@ -454,7 +525,8 @@ export default {
       messages.value.push({
         content: userMessage,
         isUser: true,
-        isTyping: false
+        isTyping: false,
+        createdAt: new Date().toISOString()
       })
 
       // 清空输入框并设置等待状态
@@ -469,8 +541,10 @@ export default {
       // 添加AI消息占位符
       messages.value.push({
         content: '',
+        rawContent: '', // 添加原始内容存储
         isUser: false,
-        isTyping: true
+        isTyping: true,
+        createdAt: new Date().toISOString()
       })
 
       let aiResponseIndex = messages.value.length - 1
@@ -482,13 +556,24 @@ export default {
         userMessage,
         currentConversationId.value,
         (data) => {
+          // 将数据添加到缓冲区
+          messageBuffer += data;
+          
+          // 存储原始内容，用于最终处理
+          messages.value[aiResponseIndex].rawContent = messageBuffer;
+          
+          // 对缓冲区内容进行预处理，减少过多的换行
+          const processedContent = messageBuffer.replace(/\n{3,}/g, '\n\n');
+          
           // 更新AI消息内容
-          messages.value[aiResponseIndex].content += data
-          messages.value[aiResponseIndex].isTyping = true
-          // 重置任何可能存在的超时检测
+          messages.value[aiResponseIndex].content = processedContent;
+          messages.value[aiResponseIndex].isTyping = true;
+          
+          // 清除之前可能存在的超时检测
           if (timeoutCheck) {
             clearTimeout(timeoutCheck)
             clearInterval(timeoutCheck)
+            timeoutCheck = null
           }
         },
         (error) => {
@@ -501,6 +586,13 @@ export default {
         () => {
           // 消息接收完成回调
           console.log('消息接收完成')
+          
+          // 消息完全接收后，进行最终的格式优化处理
+          if (messages.value[aiResponseIndex].rawContent) {
+            const finalContent = messages.value[aiResponseIndex].rawContent.replace(/\n{3,}/g, '\n\n');
+            messages.value[aiResponseIndex].content = finalContent;
+          }
+          
           messages.value[aiResponseIndex].isTyping = false
           isWaitingForResponse.value = false
           if (timeoutCheck) {
@@ -511,40 +603,43 @@ export default {
         }
       )
 
-      // 改进超时检测机制 - 作为备用方案
-      let timeoutCheck = null;
+      // 重置超时检测
       const checkMessageComplete = () => {
         if (chatConnection) {
           let lastContent = messages.value[aiResponseIndex].content;
           let noChangeCounter = 0;
 
           // 使用间隔检查，而不是嵌套setTimeout
+          // 设置为60秒检查一次，5次共5分钟
           timeoutCheck = setInterval(() => {
             // 检查内容是否有变化
             if (lastContent === messages.value[aiResponseIndex].content) {
               noChangeCounter++;
+              console.log(`响应内容未变化: ${noChangeCounter}/5次检查`);
 
-              // 如果连续5次检查内容没变化，则认为流已结束
+              // 如果连续5次检查内容没变化，则认为流已结束（总计5分钟）
               if (noChangeCounter >= 5) {
                 clearInterval(timeoutCheck);
                 messages.value[aiResponseIndex].isTyping = false;
                 isWaitingForResponse.value = false;
                 chatConnection.close();
                 chatConnection = null;
+                console.log('超时检测：5分钟内响应未变化，关闭连接');
               }
             } else {
               // 内容有变化，重置计数器
               lastContent = messages.value[aiResponseIndex].content;
               noChangeCounter = 0;
+              console.log('响应内容有变化，重置计数器');
             }
-          }, 1000);
+          }, 60000); // 60秒 = 1分钟
         }
       }
 
       checkMessageComplete()
     }
 
-    // 在 setup 函数中添加本地存储相关逻辑
+    // 本地存储相关逻辑
     const loadCurrentConversation = async () => {
       // 尝试从本地存储获取上次使用的会话ID
       const savedConversationId = localStorage.getItem('loveapp_current_conversation_id')
@@ -562,9 +657,11 @@ export default {
           const historyMessages = response.data.messages
           historyMessages.forEach(msg => {
             messages.value.push({
+              id: msg.id,
               content: msg.content,
               isUser: msg.isUser,
-              isTyping: false
+              isTyping: false,
+              createdAt: msg.createdAt
             })
           })
 
@@ -589,6 +686,97 @@ export default {
         console.log('已保存当前会话ID:', conversationId)
       }
     }
+
+    // 删除确认相关状态
+    const showDeleteModal = ref(false)
+    const pendingDeleteId = ref(null)
+    const pendingDeleteIndex = ref(null)
+
+    // 显示删除确认对话框
+    const showDeleteConfirm = (messageId, index) => {
+      pendingDeleteId.value = messageId
+      pendingDeleteIndex.value = index
+      showDeleteModal.value = true
+    }
+
+    // 关闭删除确认对话框
+    const closeDeleteModal = () => {
+      showDeleteModal.value = false
+      pendingDeleteId.value = null
+      pendingDeleteIndex.value = null
+    }
+
+    // 确认删除
+    const confirmDelete = async () => {
+      if (pendingDeleteIndex.value !== null) {
+        try {
+          // 如果有id才调用API删除
+          if (pendingDeleteId.value) {
+            await conversationApi.deleteMessage(pendingDeleteId.value)
+          }
+          // 无论是否有id，都从本地列表中删除
+          messages.value.splice(pendingDeleteIndex.value, 1)
+        } catch (error) {
+          console.error('删除消息失败:', error)
+        } finally {
+          closeDeleteModal()
+        }
+      }
+    }
+
+    // 删除消息方法修改为显示确认框
+    const deleteMessage = async (messageId, index) => {
+      showDeleteConfirm(messageId, index)
+    }
+
+    // 格式化时间
+    const formatTime = (timestamp) => {
+      const date = new Date(timestamp)
+      return date.toLocaleString()
+    }
+
+    // 返回上一页或首页
+    const goBack = () => {
+      router.push('/')
+    }
+
+    // 格式化消息函数，使用Markdown解析
+    const formatMessage = (content) => {
+      if (!content) return '';
+
+      // 首先处理文本中的\n字符串和多余的换行符
+      content = content.replace(/\\n/g, '\n');
+      content = content.replace(/\n{3,}/g, '\n\n'); // 将3个以上的连续换行符替换为2个
+      
+      // 确保代码块被正确识别
+      content = content.replace(/```(\w+)?\s*\n([\s\S]*?)```/g, (match, language, code) => {
+        // 如果没有指定语言，默认为plaintext
+        const lang = language || 'plaintext';
+        return `\n\`\`\`${lang}\n${code}\`\`\`\n`;
+      });
+      
+      // 处理可能存在的单行代码段（使用单个反引号包裹的内容）
+      content = content.replace(/`([^`]+)`/g, (match, code) => {
+        return `\`${code}\``;
+      });
+      
+      try {
+        // 使用marked将Markdown转换为HTML，然后使用DOMPurify清理HTML
+        const htmlContent = marked(content);
+        // 配置DOMPurify允许的标签和属性
+        const purifyOptions = {
+          ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'p', 'a', 'ul', 'ol', 
+            'nl', 'li', 'b', 'i', 'strong', 'em', 'strike', 'code', 'hr', 'br', 'div', 
+            'table', 'thead', 'caption', 'tbody', 'tr', 'th', 'td', 'pre', 'span', 'img'],
+          ALLOWED_ATTR: ['href', 'name', 'target', 'class', 'id', 'style', 'src', 'alt']
+        };
+        return DOMPurify.sanitize(htmlContent, purifyOptions);
+      } catch (error) {
+        console.error('Markdown解析错误:', error);
+        // 如果解析出错，返回安全处理过的原内容
+        return DOMPurify.sanitize(content.replace(/\n/g, '<br>'));
+      }
+    };
 
     return {
       inputMessage,
@@ -616,7 +804,16 @@ export default {
       handleLogout,
       handleLoginSuccess,
       showLoginNotice,
-      dismissLoginNotice
+      dismissLoginNotice,
+      deleteMessage,
+      formatTime,
+      goBack,
+      // 添加新的返回属性
+      showDeleteModal,
+      showDeleteConfirm,
+      closeDeleteModal,
+      confirmDelete,
+      formatMessage
     }
   }
 }
@@ -906,68 +1103,67 @@ export default {
   animation: ripple 2s infinite;
 }
 
+/* 模态框背景 */
 .modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s forwards;
+  background-color: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
 }
 
-.modal-content {
+/* 模态框内容容器 */
+.auth-modal {
   position: relative;
-  animation: scaleIn 0.3s forwards;
+  animation: modalSlideIn 0.4s ease-out;
 }
 
+/* 关闭按钮 */
 .close-button {
   position: absolute;
-  top: -15px;
-  right: -15px;
-  width: 30px;
-  height: 30px;
+  top: 15px;
+  right: 15px;
+  width: 36px;
+  height: 36px;
+  background-color: rgba(30, 31, 70, 0.7);
+  border: 1px solid rgba(255, 100, 170, 0.3);
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff006a, #3a86ff);
-  color: white;
-  border: none;
-  font-size: 1.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 32px;
+  text-align: center;
   cursor: pointer;
-  z-index: 10;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
   transition: all 0.3s ease;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .close-button:hover {
+  background-color: rgba(255, 70, 70, 0.7);
   transform: rotate(90deg);
 }
 
 @keyframes fadeIn {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes scaleIn {
-  0% { transform: scale(0.8); }
-  100% { transform: scale(1); }
-}
-
-@keyframes buttonGlow {
-  0% { left: -100%; }
-  100% { left: 200%; }
-}
-
-@keyframes ripple {
-  0% { left: -100%; }
-  100% { left: 100%; }
+@keyframes modalSlideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cyber-grid {
@@ -989,11 +1185,54 @@ export default {
 }
 
 .chat-header {
-  text-align: center;
-  padding: 1rem;
+  padding: 1rem 2rem;
+  background-color: rgba(10, 15, 30, 0.8);
+  border-bottom: 1px solid #ff6b95;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
   position: relative;
-  z-index: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10;
+}
+
+.header-left {
+  flex: 0 0 auto;
+  margin-right: 20px;
+}
+
+.header-center {
+  flex: 1;
+  text-align: center;
+}
+
+.back-button {
+  background: linear-gradient(135deg, #3d0f33 0%, #5f1f4e 100%);
+  border: 1px solid #ff6b95;
+  border-radius: 8px;
+  color: #ffc0cb;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.back-button:hover {
+  background: linear-gradient(135deg, #5f1f4e 0%, #6f2f5e 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.back-icon {
+  font-size: 1.2rem;
+  margin-right: 6px;
+}
+
+.back-text {
+  font-weight: bold;
 }
 
 .chat-messages {
@@ -1077,13 +1316,14 @@ export default {
 }
 
 .message-content {
-  padding: 1rem;
-  border-radius: 12px;
-  max-width: 70%;
+  padding: 12px;
+  border-radius: 8px;
+  max-width: 80%;
   line-height: 1.5;
+  word-break: break-word;
   position: relative;
+  overflow: hidden;
   white-space: pre-wrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .message-user {
@@ -1098,15 +1338,54 @@ export default {
 }
 
 .message-user .message-content {
-  background-color: rgba(83, 100, 255, 0.3);
-  border: 1px solid rgba(83, 100, 255, 0.5);
+  background-color: rgba(250, 82, 91, 0.3);
+  border: 1px solid rgba(250, 82, 91, 0.5);
   margin-right: 0.2rem;
 }
 
 .message-ai .message-content {
-  background-color: rgba(255, 100, 100, 0.3);
-  border: 1px solid rgba(255, 100, 100, 0.5);
+  background-color: rgba(255, 51, 153, 0.3);
+  border: 1px solid rgba(255, 51, 153, 0.5);
   margin-left: 0.2rem;
+}
+
+/* 消息底部时间和删除按钮样式 */
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px dotted rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+  min-height: 20px; /* 固定最小高度，防止布局跳动 */
+}
+
+.message-time {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.7rem;
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  opacity: 0; /* 默认隐藏 */
+  margin-left: auto; /* 保持右对齐 */
+}
+
+.message-content:hover .delete-btn {
+  opacity: 1; /* 鼠标悬停时显示 */
+}
+
+.delete-btn:hover {
+  color: #ff4d4f;
+  background-color: rgba(255, 77, 79, 0.1);
 }
 
 .typing-indicator {
@@ -1181,5 +1460,265 @@ input:disabled {
   .chat-container {
     padding-left: 0;
   }
+}
+
+/* 删除确认对话框样式 */
+.delete-confirm-modal {
+  background: linear-gradient(135deg, rgba(20, 21, 46, 0.95), rgba(16, 17, 38, 0.95));
+  border: 1px solid rgba(255, 100, 170, 0.3);
+  border-radius: 12px;
+  width: 300px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  animation: modalSlideIn 0.4s ease-out;
+}
+
+.delete-confirm-header {
+  font-size: 1.2rem;
+  color: #ff4d4f;
+  font-weight: bold;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.delete-confirm-content {
+  margin-bottom: 20px;
+  text-align: center;
+  color: #f0f0f0;
+  line-height: 1.5;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.cancel-btn, .confirm-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 50px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.confirm-btn {
+  background: linear-gradient(90deg, #ff006a 30%, #ff4b8b 100%);
+  color: white;
+}
+
+.cancel-btn:hover, .confirm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* 修改Markdown样式 */
+:deep(.message-text) {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  font-family: inherit !important;
+  margin: 0 !important;
+  width: 100%;
+  overflow: visible !important;
+  background: transparent !important;
+  line-height: 1.2;  /* 减少默认行高 */
+}
+
+/* 调整段落间距 */
+:deep(p) {
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+/* 减少换行的垂直空间 */
+:deep(br) {
+  content: "";
+  display: block;
+  margin: 0;
+  padding: 0;
+  height: 0;  /* 彻底移除高度 */
+  line-height: 0;
+}
+
+/* 标题样式 */
+:deep(h1) {
+  font-size: 1.8em;
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  color: #ff9fd7;
+  line-height: 1.2;
+}
+
+:deep(h2) {
+  font-size: 1.5em;
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  color: #ff7ac6;
+  line-height: 1.2;
+}
+
+:deep(h3) {
+  font-size: 1.3em;
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  color: #f472b6;
+  line-height: 1.2;
+}
+
+:deep(h4), :deep(h5), :deep(h6) {
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  line-height: 1.2;
+}
+
+/* 链接样式 */
+:deep(a) {
+  color: #ff7ac6 !important;
+  text-decoration: underline !important;
+  word-break: break-all !important;
+}
+
+:deep(a:hover) {
+  color: #ff9fd7 !important;
+}
+
+/* 列表样式 */
+:deep(ul), :deep(ol) {
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  padding-left: 1.5em;
+}
+
+:deep(li) {
+  margin-bottom: 0.1em;
+  line-height: 1.2;
+}
+
+/* 表格样式 */
+:deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.3em 0;
+  background-color: rgba(30, 41, 59, 0.4);
+}
+
+:deep(th), :deep(td) {
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  padding: 6px;
+  text-align: left;
+}
+
+:deep(th) {
+  background-color: rgba(30, 41, 59, 0.7);
+  color: #ff7ac6;
+}
+
+/* 代码样式增强 */
+:deep(code) {
+  background-color: rgba(30, 41, 59, 0.7);
+  color: #f97316;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9em;
+}
+
+:deep(pre) {
+  margin: 0.3em 0;
+  padding: 0;
+  background: transparent;
+}
+
+:deep(pre code) {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+  background-color: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(100, 116, 139, 0.7);
+  border-radius: 6px;
+  color: #e5e7eb;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  line-height: 1.2;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  margin: 0.4em 0;
+}
+
+/* 引用样式 */
+:deep(blockquote) {
+  border-left: 3px solid #ff7ac6;
+  padding-left: 1em;
+  margin: 0.3em 0;
+  color: #94a3b8;
+}
+
+:deep(blockquote p) {
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+}
+
+/* 水平线样式 */
+:deep(hr) {
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 122, 198, 0.3), transparent);
+  margin: 0.4em 0;
+}
+
+/* 强调样式 */
+:deep(strong) {
+  color: #ff7ac6;
+  font-weight: bold;
+}
+
+:deep(em) {
+  color: #fb7185;
+  font-style: italic;
+}
+
+/* 语法高亮颜色增强 */
+:deep(.hljs-keyword) {
+  color: #f472b6; /* 关键字 */
+}
+
+:deep(.hljs-string) {
+  color: #86efac; /* 字符串 */
+}
+
+:deep(.hljs-number) {
+  color: #fdba74; /* 数值 */
+}
+
+:deep(.hljs-function) {
+  color: #93c5fd; /* 函数 */
+}
+
+:deep(.hljs-comment) {
+  color: #94a3b8; /* 注释 */
+}
+
+:deep(.hljs-attr) {
+  color: #fcd34d; /* 属性 */
+}
+
+:deep(.hljs-variable) {
+  color: #fb7185; /* 变量 */
+}
+
+:deep(.hljs-title) {
+  color: #93c5fd; /* 标题 */
+}
+
+:deep(.hljs-class) {
+  color: #fcd34d; /* 类 */
+}
+
+:deep(.hljs-tag) {
+  color: #fb7185; /* 标签 */
 }
 </style>

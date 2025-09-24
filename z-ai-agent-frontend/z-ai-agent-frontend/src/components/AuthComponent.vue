@@ -279,16 +279,16 @@ const handleRegister = async () => {
 <style scoped>
 .auth-container {
   background: linear-gradient(135deg, rgba(20, 21, 46, 0.95), rgba(16, 17, 38, 0.95));
-  border-radius: 16px;
-  padding: 1.5rem;
-  width: 300px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  padding: 2.5rem;
+  width: 450px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(100, 100, 255, 0.2);
   border: 1px solid rgba(100, 100, 255, 0.2);
   overflow: hidden;
   position: relative;
   z-index: 1000;
   animation: popIn 0.3s forwards ease-out;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
 }
 
 .auth-container::before {
@@ -301,10 +301,10 @@ const handleRegister = async () => {
   background: linear-gradient(
     45deg,
     transparent,
-    rgba(58, 134, 255, 0.05),
+    rgba(58, 134, 255, 0.1),
     transparent
   );
-  animation: rotate 10s linear infinite;
+  animation: rotate 15s linear infinite;
   pointer-events: none;
   z-index: -1;
 }
@@ -312,10 +312,10 @@ const handleRegister = async () => {
 /* 消息提示样式 */
 .error-message,
 .success-message {
-  margin: 0.5rem 0;
-  padding: 0.6rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  margin: 0.8rem 0;
+  padding: 0.8rem;
+  border-radius: 10px;
+  font-size: 1rem;
   text-align: center;
   animation: fadeIn 0.3s forwards;
 }
@@ -340,8 +340,8 @@ const handleRegister = async () => {
 .auth-tabs {
   display: flex;
   position: relative;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(100, 100, 255, 0.2);
+  margin-bottom: 2rem;
+  border-bottom: 2px solid rgba(100, 100, 255, 0.2);
 }
 
 .auth-tab {
@@ -349,9 +349,10 @@ const handleRegister = async () => {
   background: transparent;
   border: none;
   color: #b5b5c3;
-  padding: 0.8rem 0;
+  padding: 1rem 0;
   cursor: pointer;
   font-weight: bold;
+  font-size: 1.2rem;
   position: relative;
   transition: all 0.3s ease;
   z-index: 1;
@@ -359,6 +360,7 @@ const handleRegister = async () => {
 
 .auth-tab.active {
   color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
 .auth-tab:focus {
@@ -367,11 +369,13 @@ const handleRegister = async () => {
 
 .tab-indicator {
   position: absolute;
-  bottom: 0;
-  height: 3px;
+  bottom: -2px;
+  height: 4px;
   width: 50%;
   background: linear-gradient(to right, #ff006a, #3a86ff);
   transition: transform 0.3s ease;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 0 10px rgba(58, 134, 255, 0.5);
 }
 
 .tab-indicator.login {
@@ -385,7 +389,7 @@ const handleRegister = async () => {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1.5rem;
   animation: fadeIn 0.3s forwards;
 }
 
@@ -399,19 +403,20 @@ const handleRegister = async () => {
 
 .cyber-input {
   width: 100%;
-  padding: 0.8rem 1rem;
+  padding: 1.2rem 1.5rem;
   background-color: rgba(30, 31, 70, 0.6);
   border: 1px solid rgba(100, 100, 255, 0.2);
-  border-radius: 8px;
+  border-radius: 10px;
   color: #ffffff;
   font-family: var(--font-family, 'JetBrains Mono');
+  font-size: 1.1rem;
   transition: all 0.3s ease;
 }
 
 .cyber-input:focus {
   outline: none;
   border-color: #3a86ff;
-  box-shadow: 0 0 0 3px rgba(58, 134, 255, 0.2);
+  box-shadow: 0 0 15px rgba(58, 134, 255, 0.3);
 }
 
 .input-glow {
@@ -437,31 +442,33 @@ const handleRegister = async () => {
 }
 
 .auth-button {
-  padding: 0.8rem 0;
+  padding: 1.2rem 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   color: white;
   font-weight: bold;
+  font-size: 1.2rem;
   cursor: pointer;
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
+  letter-spacing: 1px;
 }
 
 .login-button {
   background: linear-gradient(90deg, #1a56ff, #00c6ff);
-  box-shadow: 0 4px 10px rgba(58, 134, 255, 0.3);
+  box-shadow: 0 5px 15px rgba(58, 134, 255, 0.4);
 }
 
 .register-button {
   background: linear-gradient(90deg, #ff006a, #ff4b8b);
-  box-shadow: 0 4px 10px rgba(255, 0, 106, 0.3);
+  box-shadow: 0 5px 15px rgba(255, 0, 106, 0.4);
 }
 
 .auth-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(58, 134, 255, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(58, 134, 255, 0.6);
 }
 
 .button-glow {
@@ -470,7 +477,7 @@ const handleRegister = async () => {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
   animation: buttonGlow 2s infinite;
 }
 
@@ -481,9 +488,9 @@ const handleRegister = async () => {
 
 .loading-spinner {
   display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255,255,255,0.3);
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255,255,255,0.3);
   border-radius: 50%;
   border-top-color: #fff;
   animation: spin 1s ease-in-out infinite;
@@ -499,7 +506,7 @@ const handleRegister = async () => {
 }
 
 @keyframes fadeIn {
-  0% { opacity: 0; transform: translateY(10px); }
-  100% { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

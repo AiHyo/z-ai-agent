@@ -13,80 +13,83 @@
       <div class="toggle-icon">{{ collapsed ? '▶' : '◀' }}</div>
     </div>
     
-    <!-- 侧边栏标题 -->
-    <div class="sidebar-header" v-if="!collapsed">
-      <div class="cybertext">会话管理</div>
-      <button class="cyber-btn" @click="createNewConversation">
-        <span class="btn-text">新会话</span>
-      </button>
-    </div>
-    
-    <!-- 创建会话分组按钮 -->
-    <div class="group-actions" v-if="!collapsed">
-      <button class="cyber-btn small" @click="createNewGroup">
-        <span class="btn-text">新建分组</span>
-      </button>
-    </div>
-    
-    <!-- 会话分组和会话列表 -->
-    <div class="sidebar-content" v-if="!collapsed">
-      <!-- 未分组会话 -->
-      <div class="conversation-section">
-        <div class="section-title">未分组</div>
-        <div class="conversation-list">
-          <div
-            v-for="conversation in ungroupedConversations"
-            :key="conversation.id"
-            :class="['conversation-item', { active: activeConversationId === conversation.id }]"
-            @click="selectConversation(conversation)"
-          >
-            <div class="conversation-title">{{ conversation.title }}</div>
-            <div class="conversation-actions">
-              <button class="action-btn edit" @click.stop="editConversation(conversation)">
-                <span class="action-icon">✏️</span>
-              </button>
-              <button class="action-btn delete" @click.stop="deleteConversation(conversation)">
-                <span class="action-icon">🗑️</span>
-              </button>
+    <!-- 内容包装器 - 新增元素 -->
+    <div class="sidebar-content-wrapper" :class="{ 'content-hidden': collapsed }">
+      <!-- 侧边栏标题 -->
+      <div class="sidebar-header">
+        <div class="cybertext">会话管理</div>
+        <button class="cyber-btn" @click="createNewConversation">
+          <span class="btn-text">新会话</span>
+        </button>
+      </div>
+      
+      <!-- 创建会话分组按钮 -->
+      <div class="group-actions">
+        <button class="cyber-btn small" @click="createNewGroup">
+          <span class="btn-text">新建分组</span>
+        </button>
+      </div>
+      
+      <!-- 会话分组和会话列表 -->
+      <div class="sidebar-content">
+        <!-- 未分组会话 -->
+        <div class="conversation-section">
+          <div class="section-title">未分组</div>
+          <div class="conversation-list">
+            <div
+              v-for="conversation in ungroupedConversations"
+              :key="conversation.id"
+              :class="['conversation-item', { active: activeConversationId === conversation.id }]"
+              @click="selectConversation(conversation)"
+            >
+              <div class="conversation-title">{{ conversation.title }}</div>
+              <div class="conversation-actions">
+                <button class="action-btn edit" @click.stop="editConversation(conversation)">
+                  <span class="action-icon">✏️</span>
+                </button>
+                <button class="action-btn delete" @click.stop="deleteConversation(conversation)">
+                  <span class="action-icon">🗑️</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      
-      <!-- 分组会话 -->
-      <div 
-        v-for="group in groups" 
-        :key="group.id" 
-        class="conversation-section group"
-      >
-        <div class="section-title" @click="toggleGroup(group.id)">
-          <span class="group-collapse-icon">{{ expandedGroups.has(group.id) ? '▼' : '►' }}</span>
-          <span>{{ group.name }}</span>
-          <div class="group-actions">
-            <button class="action-btn edit" @click.stop="editGroup(group)">
-              <span class="action-icon small">✏️</span>
-            </button>
-            <button class="action-btn delete" @click.stop="deleteGroup(group)">
-              <span class="action-icon small">🗑️</span>
-            </button>
-          </div>
-        </div>
         
-        <div class="conversation-list" v-if="expandedGroups.has(group.id)">
-          <div
-            v-for="conversation in getConversationsByGroup(group.id)"
-            :key="conversation.id"
-            :class="['conversation-item', { active: activeConversationId === conversation.id }]"
-            @click="selectConversation(conversation)"
-          >
-            <div class="conversation-title">{{ conversation.title }}</div>
-            <div class="conversation-actions">
-              <button class="action-btn edit" @click.stop="editConversation(conversation)">
-                <span class="action-icon">✏️</span>
+        <!-- 分组会话 -->
+        <div 
+          v-for="group in groups" 
+          :key="group.id" 
+          class="conversation-section group"
+        >
+          <div class="section-title" @click="toggleGroup(group.id)">
+            <span class="group-collapse-icon">{{ expandedGroups.has(group.id) ? '▼' : '►' }}</span>
+            <span>{{ group.name }}</span>
+            <div class="group-actions">
+              <button class="action-btn edit" @click.stop="editGroup(group)">
+                <span class="action-icon small">✏️</span>
               </button>
-              <button class="action-btn delete" @click.stop="deleteConversation(conversation)">
-                <span class="action-icon">🗑️</span>
+              <button class="action-btn delete" @click.stop="deleteGroup(group)">
+                <span class="action-icon small">🗑️</span>
               </button>
+            </div>
+          </div>
+          
+          <div class="conversation-list" v-if="expandedGroups.has(group.id)">
+            <div
+              v-for="conversation in getConversationsByGroup(group.id)"
+              :key="conversation.id"
+              :class="['conversation-item', { active: activeConversationId === conversation.id }]"
+              @click="selectConversation(conversation)"
+            >
+              <div class="conversation-title">{{ conversation.title }}</div>
+              <div class="conversation-actions">
+                <button class="action-btn edit" @click.stop="editConversation(conversation)">
+                  <span class="action-icon">✏️</span>
+                </button>
+                <button class="action-btn delete" @click.stop="deleteConversation(conversation)">
+                  <span class="action-icon">🗑️</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -94,53 +97,71 @@
     </div>
     
     <!-- 编辑会话对话框 -->
-    <div class="modal" v-if="showEditConversationModal">
-      <div class="modal-content">
-        <h2>编辑会话</h2>
-        <div class="form-group">
-          <label>标题</label>
-          <input type="text" v-model="editingConversation.title" />
-        </div>
-        <div class="form-group">
-          <label>分组</label>
-          <select v-model="editingConversation.groupId">
-            <option :value="null">无分组</option>
-            <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-          </select>
-        </div>
-        <div class="modal-actions">
-          <button @click="cancelEditConversation">取消</button>
-          <button @click="saveEditConversation">保存</button>
+    <teleport to="body">
+      <div v-if="showEditConversationModal" class="modal">
+        <div class="modal-content">
+          <h2>编辑会话</h2>
+          <div class="form-group">
+            <label for="conversation-title">会话名称:</label>
+            <input 
+              id="conversation-title"
+              v-model="editingConversation.title" 
+              placeholder="输入会话名称" 
+              class="cyber-input" 
+            />
+          </div>
+          <div class="form-group">
+            <label for="conversation-group">所属分组:</label>
+            <select id="conversation-group" v-model="editingConversation.groupId" class="cyber-select">
+              <option :value="null">未分组</option>
+              <option v-for="group in groups" :key="group.id" :value="group.id">
+                {{ group.name }}
+              </option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button @click="cancelEditConversation" class="cyber-btn">取消</button>
+            <button @click="saveEditConversation" class="cyber-btn save">保存</button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
     
     <!-- 编辑分组对话框 -->
-    <div class="modal" v-if="showEditGroupModal">
-      <div class="modal-content">
-        <h2>{{ editingGroup.id ? '编辑分组' : '新建分组' }}</h2>
-        <div class="form-group">
-          <label>名称</label>
-          <input type="text" v-model="editingGroup.name" />
-        </div>
-        <div class="modal-actions">
-          <button @click="cancelEditGroup">取消</button>
-          <button @click="saveEditGroup">保存</button>
+    <teleport to="body">
+      <div v-if="showEditGroupModal" class="modal">
+        <div class="modal-content">
+          <h2>{{ editingGroup.id ? '编辑分组' : '创建分组' }}</h2>
+          <div class="form-group">
+            <label for="group-name">分组名称:</label>
+            <input 
+              id="group-name"
+              v-model="editingGroup.name" 
+              placeholder="输入分组名称" 
+              class="cyber-input" 
+            />
+          </div>
+          <div class="form-actions">
+            <button @click="cancelEditGroup" class="cyber-btn">取消</button>
+            <button @click="saveEditGroup" class="cyber-btn save">保存</button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
     
-    <!-- 确认删除对话框 -->
-    <div class="modal" v-if="showDeleteConfirmModal">
-      <div class="modal-content">
-        <h2>确认删除</h2>
-        <p>{{ deleteConfirmMessage }}</p>
-        <div class="modal-actions">
-          <button @click="cancelDelete">取消</button>
-          <button class="delete-btn" @click="confirmDelete">删除</button>
+    <!-- 删除确认对话框 -->
+    <teleport to="body">
+      <div v-if="showDeleteConfirmModal" class="modal">
+        <div class="modal-content">
+          <h2>确认删除</h2>
+          <p>{{ deleteConfirmMessage }}</p>
+          <div class="form-actions">
+            <button @click="cancelDelete" class="cyber-btn">取消</button>
+            <button @click="confirmDelete" class="cyber-btn delete">删除</button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
   </div>
 </template>
 
@@ -479,7 +500,7 @@ export default {
   border-right: 1px solid #4a55a0;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease, width 0.3s ease;
+  transition: width 0.3s ease;
   z-index: 200;
   overflow: hidden;
   box-shadow: 0 0 20px rgba(83, 100, 255, 0.3);
@@ -487,7 +508,20 @@ export default {
 
 .sidebar-collapsed {
   width: 30px;
-  transform: translateX(-250px);
+}
+
+/* 新增内容包装器样式 */
+.sidebar-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.3s ease;
+}
+
+.content-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .sidebar-toggle {
@@ -759,36 +793,56 @@ export default {
   border-radius: 3px;
 }
 
+/* 新增样式 */
+.cyber-input,
+.cyber-select {
+  width: 100%;
+  padding: 8px;
+  background-color: rgba(30, 30, 50, 0.6);
+  border: 1px solid #4a55a0;
+  color: white;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.cyber-input:focus,
+.cyber-select:focus {
+  border-color: #70f6ff;
+  box-shadow: 0 0 8px rgba(112, 246, 255, 0.5);
+  outline: none;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.cyber-btn.save {
+  background-color: rgba(83, 100, 255, 0.2);
+  border-color: #70f6ff;
+}
+
+.cyber-btn.save:hover {
+  background-color: rgba(83, 100, 255, 0.4);
+}
+
+.cyber-btn.delete {
+  background-color: rgba(255, 0, 106, 0.2);
+  color: #ff6696;
+  border-color: #ff006a;
+}
+
+.cyber-btn.delete:hover {
+  background-color: rgba(255, 0, 106, 0.4);
+  color: #ffffff;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   margin-top: 20px;
-}
-
-.modal-actions button {
-  margin-left: 10px;
-  padding: 8px 15px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.modal-actions button:first-child {
-  background-color: #323660;
-  color: #b5beff;
-  border: 1px solid #4a55a0;
-}
-
-.modal-actions button:last-child {
-  background-color: #4a55a0;
-  color: white;
-  border: 1px solid #70f6ff;
-}
-
-.modal-actions button.delete-btn {
-  background-color: rgba(255, 0, 106, 0.2);
-  color: #ff6696;
-  border: 1px solid #ff006a;
 }
 
 @keyframes glowing {
