@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS conversation_group
     user_id    BIGINT       NOT NULL,
     ai_type    VARCHAR(20),            -- AI类型："love-app"或"manus"，便于前端按类型过滤
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    is_deleted SMALLINT     NOT NULL DEFAULT 0
+    is_deleted BOOLEAN     NOT NULL DEFAULT 0
 );
 -- 外键约束
 ALTER TABLE conversation
