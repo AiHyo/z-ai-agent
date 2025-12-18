@@ -1138,6 +1138,7 @@ export default {
   );
   transform: skewX(-25deg);
   animation: buttonGlow 2s infinite;
+  pointer-events: none;
 }
 
 .user-info {

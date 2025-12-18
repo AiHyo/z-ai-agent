@@ -46,7 +46,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import AuthComponent from './AuthComponent.vue'
 import { authApi } from '@/services/api'
 
@@ -83,21 +83,17 @@ export default {
       const token = localStorage.getItem('Authorization')
       if (token) {
         try {
-          // 使用 isLogin 接口检查登录状态
           const response = await authApi.isLogin()
           if (response.code === 0 && response.data === true) {
-            // 获取用户信息
             const userInfoResponse = await authApi.getUserInfo()
             if (userInfoResponse.code === 0 && userInfoResponse.data) {
               isLoggedIn.value = true
               username.value = userInfoResponse.data.username
             } else {
-              // token无效
               localStorage.removeItem('Authorization')
               isLoggedIn.value = false
             }
           } else {
-            // token无效
             localStorage.removeItem('Authorization')
             isLoggedIn.value = false
           }
@@ -114,6 +110,11 @@ export default {
       isLoggedIn.value = true
       username.value = userData.username
       closeModal()
+      
+      // 触发全局事件，通知其他组件登录状态变化
+      window.dispatchEvent(new CustomEvent('auth-status-changed', {
+        detail: { isLoggedIn: true, username: userData.username }
+      }))
     }
 
     // 登出处理
@@ -121,19 +122,20 @@ export default {
       const token = localStorage.getItem('Authorization')
       if (token) {
         try {
-          await authApi.logout(token)
+          await authApi.logout()
         } catch (error) {
           console.error('登出失败', error)
-        } finally {
-          localStorage.removeItem('Authorization')
-          isLoggedIn.value = false
-          username.value = ''
         }
-      } else {
-        localStorage.removeItem('Authorization')
-        isLoggedIn.value = false
-        username.value = ''
       }
+      
+      localStorage.removeItem('Authorization')
+      isLoggedIn.value = false
+      username.value = ''
+      
+      // 触发全局事件，通知其他组件登录状态变化
+      window.dispatchEvent(new CustomEvent('auth-status-changed', {
+        detail: { isLoggedIn: false, username: '' }
+      }))
     }
 
     // 关闭登录弹窗
@@ -141,9 +143,20 @@ export default {
       showAuthModal.value = false
     }
 
-    // 组件挂载时检查登录状态
+    // 监听显示登录弹窗事件
+    const handleShowLoginModal = () => {
+      showLoginForm()
+    }
+
+    // 组件挂载时检查登录状态并添加事件监听
     onMounted(() => {
       checkLoginStatus()
+      window.addEventListener('show-login-modal', handleShowLoginModal)
+    })
+
+    // 组件卸载时移除事件监听
+    onUnmounted(() => {
+      window.removeEventListener('show-login-modal', handleShowLoginModal)
     })
 
     return {
@@ -225,6 +238,7 @@ export default {
   );
   transform: skewX(-25deg);
   animation: buttonGlow 2s infinite;
+  pointer-events: none;
 }
 
 @keyframes buttonGlow {

@@ -240,7 +240,7 @@ const handleRegister = async () => {
 
   try {
     isLoading.value = true
-    const response = await axios.post(`/api/user/register`, {
+    const response = await apiClient.post('/user/register', {
       username: registerForm.username,
       password: registerForm.password
     })
@@ -479,6 +479,7 @@ const handleRegister = async () => {
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
   animation: buttonGlow 2s infinite;
+  pointer-events: none;
 }
 
 @keyframes buttonGlow {

@@ -20,7 +20,7 @@
     </div>
     
     <div class="app-cards">
-      <router-link to="/love-app" class="app-card love-card">
+      <div @click="handleCardClick('/love-app')" class="app-card love-card">
         <div class="app-card-icon">
           <div class="icon-container love-icon">
             <AiAvatar type="love" />
@@ -43,9 +43,9 @@
           <div class="decoration-circle"></div>
           <div class="decoration-line"></div>
         </div>
-      </router-link>
+      </div>
       
-      <router-link to="/manus-app" class="app-card manus-card">
+      <div @click="handleCardClick('/manus-app')" class="app-card manus-card">
         <div class="app-card-icon">
           <div class="icon-container manus-icon">
             <AiAvatar type="manus" />
@@ -68,7 +68,7 @@
           <div class="decoration-circle"></div>
           <div class="decoration-line"></div>
         </div>
-      </router-link>
+      </div>
     </div>
     
     <div class="home-features">
@@ -135,14 +135,14 @@
         <h2 class="cta-title">立即体验 <span class="text-gradient">AI智能体</span></h2>
         <p class="cta-description">开启智能对话新时代，让AI成为您的得力助手</p>
         <div class="cta-buttons">
-          <router-link to="/love-app" class="cta-button love-button">
+          <button @click="handleCardClick('/love-app')" class="cta-button love-button">
             试用AI恋爱大师
             <span class="button-glow"></span>
-          </router-link>
-          <router-link to="/manus-app" class="cta-button manus-button">
+          </button>
+          <button @click="handleCardClick('/manus-app')" class="cta-button manus-button">
             试用AI超级智能体
             <span class="button-glow"></span>
-          </router-link>
+          </button>
         </div>
       </div>
       <div class="cta-decoration">
@@ -153,6 +153,8 @@
     </div>
     
     <TheFooter />
+
+
   </div>
 </template>
 
@@ -160,6 +162,9 @@
 import TheFooter from '@/components/TheFooter.vue'
 import AiAvatar from '@/components/AiAvatar.vue'
 import HeaderNav from '@/components/HeaderNav.vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { authApi } from '@/services/api'
 
 export default {
   name: 'HomeView',
@@ -167,6 +172,83 @@ export default {
     TheFooter,
     AiAvatar,
     HeaderNav
+  },
+  setup() {
+    const router = useRouter()
+    const isLoggedIn = ref(false)
+    const username = ref('')
+
+    // 检查登录状态
+    const checkLoginStatus = async () => {
+      const token = localStorage.getItem('Authorization')
+      if (token) {
+        try {
+          const response = await authApi.isLogin()
+          if (response.code === 0 && response.data === true) {
+            const userInfoResponse = await authApi.getUserInfo()
+            if (userInfoResponse.code === 0 && userInfoResponse.data) {
+              isLoggedIn.value = true
+              username.value = userInfoResponse.data.username
+            } else {
+              localStorage.removeItem('Authorization')
+              isLoggedIn.value = false
+            }
+          } else {
+            localStorage.removeItem('Authorization')
+            isLoggedIn.value = false
+          }
+        } catch (error) {
+          console.error('获取用户信息失败', error)
+          localStorage.removeItem('Authorization')
+          isLoggedIn.value = false
+        }
+      }
+    }
+
+    // 处理卡片点击
+    const handleCardClick = (route) => {
+      if (isLoggedIn.value) {
+        // 已登录，直接跳转
+        router.push(route)
+      } else {
+        // 未登录，保存目标路由并触发HeaderNav显示登录弹窗
+        localStorage.setItem('redirectAfterLogin', route)
+        // 触发全局事件，让HeaderNav显示登录弹窗
+        window.dispatchEvent(new CustomEvent('show-login-modal'))
+      }
+    }
+
+    // 监听登录状态变化
+    const handleAuthStatusChange = (event) => {
+      isLoggedIn.value = event.detail.isLoggedIn
+      username.value = event.detail.username
+      
+      // 如果登录成功且有待跳转的路由，执行跳转
+      if (event.detail.isLoggedIn) {
+        const redirectRoute = localStorage.getItem('redirectAfterLogin')
+        if (redirectRoute) {
+          localStorage.removeItem('redirectAfterLogin')
+          router.push(redirectRoute)
+        }
+      }
+    }
+
+    // 组件挂载时检查登录状态并添加事件监听
+    onMounted(() => {
+      checkLoginStatus()
+      window.addEventListener('auth-status-changed', handleAuthStatusChange)
+    })
+
+    // 组件卸载时移除事件监听
+    onUnmounted(() => {
+      window.removeEventListener('auth-status-changed', handleAuthStatusChange)
+    })
+
+    return {
+      isLoggedIn,
+      username,
+      handleCardClick
+    }
   },
   mounted() {
     this.initCyberParticles();
@@ -580,6 +662,7 @@ export default {
   border: 1px solid rgba(100, 100, 255, 0.1);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   transform: perspective(1000px) rotateX(0deg);
+  cursor: pointer;
 }
 
 .app-card:hover {
@@ -693,6 +776,7 @@ export default {
   background: rgba(255, 255, 255, 0.3);
   transform: skewX(-25deg);
   animation: buttonGlow 3s infinite;
+  pointer-events: none;
 }
 
 @keyframes buttonGlow {
@@ -913,6 +997,61 @@ export default {
   0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
   50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.5; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* 弹窗样式 */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s forwards;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  position: relative;
+  animation: scaleIn 0.3s forwards;
+}
+
+.close-button {
+  position: absolute;
+  top: -15px;
+  right: -15px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff006a, #3a86ff);
+  color: white;
+  border: none;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s ease;
+}
+
+.close-button:hover {
+  transform: rotate(90deg);
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  0% { transform: scale(0.8); }
+  100% { transform: scale(1); }
 }
 
 /* 响应式调整 */
